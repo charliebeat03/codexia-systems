@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://codexiasystems.dpdns.org/</loc><changefreq>monthly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/servicios</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/servicios/desarrollo-de-software</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/servicios/inteligencia-artificial</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/servicios/aplicaciones-y-plataformas</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/servicios/automatizacion-de-procesos</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/productos</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/productos/world-tree-shop</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/productos/beautyflow</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/productos/soluciones-empresariales</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/proyectos</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/proyectos/catalogo-world-tree-shop</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/proyectos/plataforma-beautyflow</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/proyectos/soluciones-a-medida</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/nosotros</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/contacto</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/recursos</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/recursos/antes-de-desarrollar-un-software</loc><changefreq>yearly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/recursos/como-elegir-entre-web-app-y-pwa</loc><changefreq>yearly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/recursos/cuando-tiene-sentido-aplicar-ia</loc><changefreq>yearly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/preguntas-frecuentes</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/soporte</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/contratacion</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://codexiasystems.dpdns.org/portafolio</loc></url>
+  <url><loc>https://codexiasystems.dpdns.org/presupuesto</loc></url>
+  <url><loc>https://codexiasystems.dpdns.org/privacidad</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+</urlset>

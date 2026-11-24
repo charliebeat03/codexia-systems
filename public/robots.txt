@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Sitemap: https://codexiasystems.dpdns.org/sitemap.xml
