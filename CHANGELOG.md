@@ -130,3 +130,12 @@
 - Documentación actualizada: el propietario inicial ya existe, el correo está confirmado y el rol `owner` está sincronizado en Auth y `profiles`.
 - Auditoría Supabase ampliada con los avisos actuales de seguridad y rendimiento.
 - Se conserva pendiente el build completo y el lockfile porque Corepack no puede resolver `registry.npmjs.org` en este entorno.
+
+## [1.10.3] - 2026-11-24
+
+### Fixed
+- Added the React 18 TypeScript declaration packages `@types/react` and `@types/react-dom` as development dependencies. This resolves the missing `JSX.IntrinsicElements` declarations reported by the Vercel TypeScript build and allows JSX event handler types to be inferred.
+
+### Validation
+- `npm run verify`: passed (14 tests, API syntax checks passed).
+- Production frontend build: not executed in this environment because dependency installation did not complete. Re-run the Vercel Preview deployment to validate the complete TypeScript/Vite build.

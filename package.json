@@ -22,7 +22,10 @@
     "react-router-dom": "6.28.1",
     "@supabase/supabase-js": "2.119.2"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@types/react": "18.3.18",
+    "@types/react-dom": "18.3.5"
+  },
   "packageManager": "pnpm@9.15.5",
   "engines": {
     "node": ">=22"
