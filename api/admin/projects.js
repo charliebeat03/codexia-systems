@@ -1,10 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 
-const clean = (value, max = 160) => String(value ?? '').replace(/[\\u0000-\\u001f\\u007f]/g, ' ').trim().slice(0, max)
+const clean = (value, max = 160) => String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max)
 const uuidPattern = /^[0-9a-f-]{36}$/i
 
 function getAdminClient() {
-  const url = clean(process.env.SUPABASE_URL, 300).replace(/\\/$/, '')
+  const url = clean(process.env.SUPABASE_URL, 300).replace(/\/$/, '')
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
   try {
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     return response(res, 405, { error: 'Método no permitido.' })
   }
 
-  const token = String(req.headers?.authorization || '').match(/^Bearer\\s+(.+)$/i)?.[1]
+  const token = String(req.headers?.authorization || '').match(/^Bearer\s+(.+)$/i)?.[1]
   if (!token) return response(res, 401, { error: 'Debes iniciar sesión para realizar esta operación.' })
 
   const admin = getAdminClient()
