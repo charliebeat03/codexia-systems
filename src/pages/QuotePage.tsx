@@ -40,6 +40,6 @@ export default function QuotePage() {
     <label className="privacy-consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/><span>Autorizo el uso de estos datos exclusivamente para evaluar y responder esta solicitud. *</span></label><p className="privacy-consent-note"><Link to="/privacidad">Leer información de privacidad</Link></p>
     <div className="quote-actions"><button className="button button-primary" type="submit" disabled={!valid||sending}>{sending?'Enviando…':sent?'Enviado correctamente':'Enviar solicitud'} <Send size={16}/></button><button className="copy-button" type="button" onClick={()=>void copy()}><ClipboardCopy size={15}/> Copiar resumen</button></div>
     {feedback&&<p className={sent||copied?'quote-feedback':'form-feedback'} role="status">{(sent||copied)&&<CheckCircle2 size={16}/>} {feedback}</p>}
-    <p className="privacy-note">Los datos se utilizan únicamente para evaluar y responder esta solicitud. El registro requiere que Codexia conecte su base de datos privada. La notificación por correo se activa por separado. No incluyas información confidencial.</p>
+    <p className="privacy-note">Revisaremos tu solicitud y normalmente responderemos en un plazo de 1 a 3 días hábiles al correo que indicaste. La confirmación automática por correo se habilitará cuando terminemos de configurar el servicio de notificaciones. Tu solicitud queda registrada aunque esa confirmación todavía no esté activa. No incluyas información confidencial.</p>
   </form></div></main><SiteFooter/></>
 }
