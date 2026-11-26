@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Activity, ArrowLeft, BadgeDollarSign, BriefcaseBusiness, CalendarClock, Check, CircleAlert, ClipboardList, ContactRound, FileText, Plus, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react'
+import { Activity, ArrowLeft, BadgeDollarSign, BriefcaseBusiness, CalendarClock, Check, CircleAlert, ClipboardList, ContactRound, FileText, FolderPlus, Plus, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react'
 import { Link, Navigate } from 'react-router-dom'
 import { SiteFooter, SiteHeader } from '../components/SiteShell'
 import { useAuth } from '../auth/AuthProvider'
@@ -8,7 +8,8 @@ import './crm-page.css'
 
 type Contact = { id:string; contact_type:'company'|'small_business'|'individual'; display_name:string; organization_name:string|null; email:string|null; phone:string|null; address:string|null; tax_id:string|null; city:string|null; country:string|null; notes:string|null; created_at:string }
 type Lead = { id:string; name:string; email:string; organization:string|null; service:string; budget:string|null; timing:string|null; details:string; features:string|null; status:string; contact_id:string|null; created_at:string }
-type Opportunity = { id:string; contact_id:string; title:string; stage:string; estimated_value:number|null; currency:string; probability:number; expected_close_date:string|null; created_at:string }
+type Opportunity = { id:string; contact_id:string; title:string; description:string|null; stage:string; estimated_value:number|null; currency:string; probability:number; expected_close_date:string|null; project_id:string|null; created_at:string }
+type PortalProfile = { id:string; email:string; display_name:string; role:string }
 type Task = { id:string; contact_id:string|null; opportunity_id:string|null; title:string; priority:string; status:string; due_at:string|null; assigned_to:string|null }
 type ActivityRow = { id:string; contact_id:string|null; opportunity_id:string|null; activity_type:string; subject:string; body:string|null; occurred_at:string }
 type Service = { id:string; code:string; name:string; min_price:number|null; max_price:number|null; currency:string; pricing_note:string|null; active:boolean }
@@ -37,6 +38,7 @@ export default function CRMPage() {
   const owner = role === 'owner'
   const [tab,setTab] = useState<Tab>('overview')
   const [contacts,setContacts] = useState<Contact[]>([])
+  const [portalProfiles,setPortalProfiles] = useState<PortalProfile[]>([])
   const [leads,setLeads] = useState<Lead[]>([])
   const [opportunities,setOpportunities] = useState<Opportunity[]>([])
   const [tasks,setTasks] = useState<Task[]>([])
@@ -70,11 +72,12 @@ export default function CRMPage() {
         db.from('crm_service_catalog').select('*').order('sort_order').order('name'),
         db.from('crm_quotes').select('*').order('created_at',{ascending:false}).limit(500),
         db.from('leads').select('*').order('created_at',{ascending:false}).limit(500),
+        db.from('profiles').select('id,email,display_name,role').order('display_name'),
       ])
       const failed = results.find((r:any)=>r.error)
       if (failed?.error) throw failed.error
       setContacts(results[0].data||[]); setOpportunities(results[1].data||[]); setTasks(results[2].data||[])
-      setActivities(results[3].data||[]); setServices(results[4].data||[]); setQuotes(results[5].data||[]); setLeads(results[6].data||[])
+      setActivities(results[3].data||[]); setServices(results[4].data||[]); setQuotes(results[5].data||[]); setLeads(results[6].data||[]); setPortalProfiles(results[7].data||[])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cargar el CRM. Comprueba la conexión y los permisos.')
     } finally { setBusy(false) }
@@ -126,6 +129,59 @@ export default function CRMPage() {
     setOpportunityForm({contact_id:'',title:'',estimated_value:'',currency:'USD',probability:'20',expected_close_date:''})
     await finish('Oportunidad registrada.')
   }
+  async function createProjectFromOpportunity(opportunity:Opportunity) {
+    if(!supabase||!user||!admin||opportunity.stage!=='won'||opportunity.project_id)return
+    const contact=contacts.find(item=>item.id===opportunity.contact_id)
+    if(!contact){setError('No se encontró el contacto asociado a esta oportunidad.');return}
+    setBusy(true);setError('');setNotice('')
+    const matchingClient=contact.email
+      ? portalProfiles.find(profile=>profile.role==='client'&&profile.email.trim().toLowerCase()===contact.email?.trim().toLowerCase())
+      : undefined
+    const summary=[
+      'Proyecto creado desde el CRM.',
+      `Oportunidad: ${opportunity.title}`,
+      `Contacto: ${contact.display_name}`,
+      contact.email? `Correo: ${contact.email}`:null,
+      opportunity.description?.trim()||null,
+      opportunity.estimated_value!=null?`Valor comercial de referencia: ${money(opportunity.estimated_value,opportunity.currency)}`:null,
+    ].filter(Boolean).join('\\n\\n')
+    const db=supabase as any
+    const {data:project,error:createError}=await db.from('projects').insert({
+      name:opportunity.title.trim().slice(0,120),
+      summary,
+      client_id:matchingClient?.id||null,
+      status:'planning',
+      progress:0,
+      start_date:new Date().toISOString().slice(0,10),
+    }).select('id').single()
+    if(createError){setBusy(false);setError('No se pudo crear el proyecto: '+createError.message);return}
+    const {error:linkError}=await db.from('crm_opportunities').update({project_id:project.id}).eq('id',opportunity.id).is('project_id',null)
+    if(linkError){
+      const {error:rollbackError}=await db.from('projects').delete().eq('id',project.id)
+      setBusy(false)
+      setError('El proyecto se creó, pero no pudo vincularse a la oportunidad. '+(rollbackError?'No se pudo revertir automáticamente, revisa el panel de proyectos.':'Se revirtió la creación para evitar duplicados.')+' Detalle: '+linkError.message)
+      await load()
+      return
+    }
+    const {error:activityError}=await db.from('crm_activities').insert({
+      contact_id:contact.id,
+      opportunity_id:opportunity.id,
+      project_id:project.id,
+      activity_type:'status_change',
+      subject:'Proyecto creado desde oportunidad ganada',
+      body:matchingClient
+        ? `Proyecto vinculado a la cuenta del portal de ${matchingClient.display_name||matchingClient.email}.`
+        : 'El proyecto quedó sin cuenta de cliente vinculada. Para habilitar el portal, invita al cliente con el mismo correo registrado en el contacto.',
+      created_by:user.id,
+    })
+    setBusy(false)
+    await finish(activityError
+      ? 'Proyecto creado y vinculado a la oportunidad. No se pudo añadir la nota automática al historial.'
+      : matchingClient
+        ? 'Proyecto creado, vinculado a la oportunidad y asignado a la cuenta del cliente.'
+        : 'Proyecto creado y vinculado a la oportunidad. No existe una cuenta de portal con ese correo, por lo que quedó sin asignar.')
+  }
+
   async function createTask(e:FormEvent) {
     e.preventDefault(); if(!supabase||!user||!admin)return
     setBusy(true)
@@ -196,7 +252,7 @@ export default function CRMPage() {
     </section>}
     {tab==='opportunities'&&<section className="crm-content"><div className="crm-section-head"><div><h2>Oportunidades</h2><p>Da seguimiento al ciclo comercial desde el primer contacto hasta el cierre.</p></div>{admin&&<button className="crm-button primary" onClick={()=>setShowForm(v=>!v)}><Plus size={16}/> Nueva oportunidad</button>}</div>
       {showForm&&admin&&<form className="crm-form" onSubmit={createOpportunity}><h3>Registrar oportunidad</h3><div className="crm-form-grid"><label>Contacto *<select required value={opportunityForm.contact_id} onChange={e=>setOpportunityForm(v=>({...v,contact_id:e.target.value}))}><option value="">Seleccionar</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.display_name}</option>)}</select></label><label>Nombre de la oportunidad *<input required minLength={2} value={opportunityForm.title} onChange={e=>setOpportunityForm(v=>({...v,title:e.target.value}))}/></label><label>Valor estimado<input type="number" min="0" step="0.01" value={opportunityForm.estimated_value} onChange={e=>setOpportunityForm(v=>({...v,estimated_value:e.target.value}))}/></label><label>Moneda<select value={opportunityForm.currency} onChange={e=>setOpportunityForm(v=>({...v,currency:e.target.value}))}><option>USD</option><option>EUR</option><option>CUP</option></select></label><label>Probabilidad (%)<input type="number" min="0" max="100" value={opportunityForm.probability} onChange={e=>setOpportunityForm(v=>({...v,probability:e.target.value}))}/></label><label>Fecha estimada de cierre<input type="date" value={opportunityForm.expected_close_date} onChange={e=>setOpportunityForm(v=>({...v,expected_close_date:e.target.value}))}/></label></div><div className="crm-form-actions"><button className="crm-button primary" disabled={busy||!contacts.length}>Guardar oportunidad</button><button type="button" className="crm-button secondary" onClick={()=>setShowForm(false)}>Cancelar</button></div>{!contacts.length&&<small>Primero registra un contacto.</small>}</form>}
-      <div className="crm-card-list">{opportunities.map(o=><article className="crm-record-card" key={o.id}><div className="crm-record-main"><span className="crm-record-kicker">{contactName(o.contact_id)}</span><h3>{o.title}</h3><p>{money(o.estimated_value,o.currency)} · Probabilidad {o.probability}% · Cierre: {dateText(o.expected_close_date)}</p></div><div className="crm-record-controls"><strong>{money(o.estimated_value,o.currency)}</strong>{admin?<select aria-label={'Estado de '+o.title} value={o.stage} disabled={busy} onChange={e=>void updateRow('crm_opportunities',o.id,{stage:e.target.value},'Estado de oportunidad actualizado.')}>{stages.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}</select>:<span className={'crm-stage '+o.stage}>{stages.find(s=>s.value===o.stage)?.label}</span>}</div></article>)}{!opportunities.length&&<p className="crm-empty">No hay oportunidades todavía.</p>}</div>
+      <div className="crm-card-list">{opportunities.map(o=><article className="crm-record-card" key={o.id}><div className="crm-record-main"><span className="crm-record-kicker">{contactName(o.contact_id)}</span><h3>{o.title}</h3><p>{money(o.estimated_value,o.currency)} · Probabilidad {o.probability}% · Cierre: {dateText(o.expected_close_date)}</p></div><div className="crm-record-controls"><strong>{money(o.estimated_value,o.currency)}</strong>{admin?<select aria-label={'Estado de '+o.title} value={o.stage} disabled={busy} onChange={e=>void updateRow('crm_opportunities',o.id,{stage:e.target.value},'Estado de oportunidad actualizado.')}>{stages.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}</select>:<span className={'crm-stage '+o.stage}>{stages.find(s=>s.value===o.stage)?.label}</span>}{o.project_id?<span className="crm-stage won">Proyecto vinculado</span>:admin&&o.stage==='won'?<button type="button" className="crm-button secondary small" disabled={busy} onClick={()=>void createProjectFromOpportunity(o)}><FolderPlus size={14}/> Crear proyecto</button>:null}</div></article>)}{!opportunities.length&&<p className="crm-empty">No hay oportunidades todavía.</p>}</div>
     </section>}
     {tab==='tasks'&&<section className="crm-content"><div className="crm-section-head"><div><h2>Tareas y seguimiento</h2><p>Organiza próximos pasos y asigna responsabilidades.</p></div>{admin&&<button className="crm-button primary" onClick={()=>setShowForm(v=>!v)}><Plus size={16}/> Nueva tarea</button>}</div>
       {showForm&&admin&&<form className="crm-form" onSubmit={createTask}><h3>Crear tarea</h3><div className="crm-form-grid"><label>Contacto *<select required value={taskForm.contact_id} onChange={e=>setTaskForm(v=>({...v,contact_id:e.target.value}))}><option value="">Seleccionar</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.display_name}</option>)}</select></label><label>Tarea *<input required minLength={2} value={taskForm.title} onChange={e=>setTaskForm(v=>({...v,title:e.target.value}))}/></label><label>Prioridad<select value={taskForm.priority} onChange={e=>setTaskForm(v=>({...v,priority:e.target.value}))}><option value="low">Baja</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label><label>Fecha límite<input type="datetime-local" value={taskForm.due_at} onChange={e=>setTaskForm(v=>({...v,due_at:e.target.value}))}/></label><label className="wide">Descripción<textarea rows={2} value={taskForm.description} onChange={e=>setTaskForm(v=>({...v,description:e.target.value}))}/></label></div><div className="crm-form-actions"><button className="crm-button primary" disabled={busy||!contacts.length}>Crear tarea</button><button type="button" className="crm-button secondary" onClick={()=>setShowForm(false)}>Cancelar</button></div></form>}
