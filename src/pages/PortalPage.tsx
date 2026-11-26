@@ -72,7 +72,7 @@ export default function PortalPage() {
   const selected = useMemo(()=>projects.find(project=>project.id===selectedProject) || projects[0] || null,[projects,selectedProject])
   const visibleUpdates = useMemo(()=>updates.filter(update=>update.project_id===selected?.id),[updates,selected])
   const visibleDocuments = useMemo(()=>documents.filter(document=>document.project_id===selected?.id),[documents,selected])
-  const profileName = profiles.find(profile=>profile.id===user?.id)?.display_name || user?.user_metadata?.full_name || user?.email || 'Usuario'
+  const profileName = profiles.find(profile=>profile.id===user?.id)?.display_name?.trim() || user?.user_metadata?.full_name?.trim() || 'Usuario'
 
   async function logActivity(entityType:string,entityId:string,action:string,summary:string) {
     if (!supabase || !user) return
