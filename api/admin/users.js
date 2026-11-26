@@ -86,7 +86,10 @@ export default async function handler(req, res) {
     }
 
     const { error: profileError } = await admin.from('profiles').upsert({ id: data.user.id, email, display_name: displayName, role }, { onConflict: 'id' })
-    if (profileError) return response(res, 502, { error: 'La invitación se envió, pero no se pudo sincronizar el perfil. Revisa la cuenta desde Supabase.' })
+    if (profileError) {
+      await admin.auth.admin.deleteUser(data.user.id)
+      return response(res, 502, { error: 'No se pudo sincronizar el perfil. La invitación fue revertida.' })
+    }
     await admin.from('activity_log').insert({ actor_id: actor.id, entity_type: 'profile', entity_id: data.user.id, action: 'invited', summary: `Invitación creada para ${email} con rol ${role}` })
     return response(res, 201, { ok: true, message: 'Invitación enviada correctamente.' })
   }
@@ -109,7 +112,10 @@ export default async function handler(req, res) {
   })
   if (updateError) return response(res, 502, { error: 'No se pudo actualizar el rol.' })
   const { error: profileError } = await admin.from('profiles').upsert({ id: userId, email: targetData.user.email || '', display_name: targetData.user.user_metadata?.full_name || targetData.user.email || '', role }, { onConflict: 'id' })
-  if (profileError) return response(res, 502, { error: 'El rol de autenticación cambió, pero no se pudo sincronizar el perfil. Revisa el usuario desde Supabase.' })
+  if (profileError) {
+    await admin.auth.admin.updateUserById(userId, { app_metadata: targetData.user.app_metadata || {} })
+    return response(res, 502, { error: 'No se pudo sincronizar el perfil. Se revirtió el cambio de rol.' })
+  }
   await admin.from('activity_log').insert({ actor_id: actor.id, entity_type: 'profile', entity_id: userId, action: 'role_changed', summary: `Rol actualizado a ${role}` })
   return response(res, 200, { ok: true, message: 'Rol actualizado. La cuenta deberá renovar su sesión para recibir los permisos nuevos.' })
 }
