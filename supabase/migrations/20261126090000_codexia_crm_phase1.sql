@@ -176,7 +176,7 @@ alter table public.crm_quote_items enable row level security;
 
 revoke all on public.crm_contacts, public.crm_opportunities, public.crm_activities, public.crm_tasks, public.crm_service_catalog, public.crm_quotes, public.crm_quote_items from anon;
 grant select, insert, update, delete on public.crm_contacts, public.crm_opportunities, public.crm_activities, public.crm_tasks, public.crm_service_catalog, public.crm_quotes, public.crm_quote_items to authenticated;
-grant usage, select on all sequences in schema public to authenticated;
+grant usage, select on sequence public.crm_quotes_quote_number_seq to authenticated;
 
 do $$
 declare t text;
