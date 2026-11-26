@@ -116,3 +116,33 @@
     overflow-wrap: anywhere;
   }
 }
+
+/* Quote editor and print-ready proposal layout. */
+.crm-quote-editor{display:grid;gap:12px;margin:18px 0}
+.crm-quote-editor-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.crm-quote-editor-head h4{margin:0;font-size:.9rem}
+.crm-quote-line{display:grid;grid-template-columns:minmax(0,2fr) minmax(90px,.7fr) minmax(130px,1fr) auto auto;align-items:end;gap:10px;padding:12px;border:1px solid var(--line,#e1e8e4);border-radius:11px}
+.crm-quote-line label{display:grid;gap:6px;min-width:0;color:var(--muted,#66736d);font-size:.78rem}
+.crm-quote-line input{width:100%;min-width:0;box-sizing:border-box;border:1px solid var(--line,#dfe7e2);border-radius:9px;background:var(--surface,#fff);color:var(--ink,#17221f);padding:10px;font:inherit;font-size:.86rem}
+.crm-quote-line>strong{white-space:nowrap;font-size:.82rem;padding-bottom:10px}
+.crm-icon-button{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line,#dfe7e2);border-radius:9px;background:var(--surface,#fff);color:var(--muted,#66736d);cursor:pointer}
+.crm-quote-totals{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:18px;padding:14px 0;border-top:1px solid var(--line,#e1e8e4);font-size:.84rem;color:var(--muted,#66736d)}
+.crm-quote-totals strong{color:var(--ink,#17221f)}
+.crm-print-sheet{display:none}
+@media(max-width:680px){.crm-quote-line{grid-template-columns:repeat(2,minmax(0,1fr))}.crm-quote-line label:first-child{grid-column:1/-1}.crm-quote-line>strong{padding:0;align-self:center}.crm-quote-editor-head{align-items:flex-start;flex-direction:column}.crm-quote-totals{justify-content:space-between;gap:8px}}
+@media print{
+  @page{size:A4;margin:18mm}
+  body *{visibility:hidden!important}
+  .crm-print-sheet,.crm-print-sheet *{visibility:visible!important}
+  .crm-print-sheet{display:block!important;position:absolute;inset:0 auto auto 0;width:100%;color:#17221f;background:#fff;font:11pt/1.5 Arial,sans-serif}
+  .crm-print-sheet header{display:flex;justify-content:space-between;gap:24px;padding-bottom:20px;border-bottom:2px solid #16856b}
+  .crm-print-sheet header strong{font-size:16pt;letter-spacing:.04em}
+  .crm-print-sheet header h1{font-size:20pt;margin:0}
+  .crm-print-sheet h2{font-size:15pt;margin:24px 0 6px}
+  .crm-print-sheet table{width:100%;border-collapse:collapse;margin:24px 0}
+  .crm-print-sheet th,.crm-print-sheet td{padding:9px;border-bottom:1px solid #dce4df;text-align:left}
+  .crm-print-sheet th{background:#f2f6f3}
+  .crm-print-totals{text-align:right;margin-left:auto;width:260px}
+  .crm-print-totals h2{border-top:2px solid #16856b;padding-top:10px}
+  .crm-print-sheet footer{margin-top:48px;padding-top:12px;border-top:1px solid #dce4df;color:#66736d;font-size:9pt}
+}
