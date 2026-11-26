@@ -21,7 +21,7 @@
 
 ## Formularios y API
 - [x] `api/contact.js`, `api/health.js`, `api/admin/users.js` y `api/admin/projects.js` están incluidos en `node --check` (validación CI pendiente).
-- [x] 14 pruebas automatizadas con Node.js superadas.
+- [x] 17 pruebas automatizadas con Node.js superadas (incluye validación básica de endpoints administrativos).
 - [x] Validación de campos, consentimiento y honeypot.
 - [x] Rate limiting persistente por HMAC mediante RPC reservada a `service_role`.
 - [x] Endpoint de contacto preparado para insertar leads en `public.leads`.
