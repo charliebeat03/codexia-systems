@@ -26,8 +26,8 @@ function response(res, status, payload) {
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
   res.setHeader('Vary', 'Authorization')
-  if (req.method !== 'POST' && req.method !== 'PATCH') {
-    res.setHeader('Allow', 'POST, PATCH')
+  if (req.method !== 'POST' && req.method !== 'PATCH' && req.method !== 'DELETE') {
+    res.setHeader('Allow', 'POST, PATCH, DELETE')
     return response(res, 405, { error: 'Método no permitido.' })
   }
 
@@ -96,6 +96,34 @@ export default async function handler(req, res) {
     }
     await admin.from('activity_log').insert({ actor_id: actor.id, entity_type: 'profile', entity_id: data.user.id, action: 'invited', summary: `Invitación creada para ${email} con rol ${role}` })
     return response(res, 201, { ok: true, message: 'Invitación enviada correctamente.' })
+  }
+
+  if (req.method === 'DELETE') {
+    const userId = clean(body.userId, 64)
+    if (!/^[0-9a-f-]{36}$/i.test(userId)) return response(res, 400, { error: 'Usuario no válido.' })
+    if (userId === actor.id) return response(res, 400, { error: 'No puedes eliminar tu propia cuenta desde esta pantalla.' })
+
+    const { data: targetData, error: targetError } = await admin.auth.admin.getUserById(userId)
+    if (targetError || !targetData.user) return response(res, 404, { error: 'No se encontró la cuenta.' })
+    const target = targetData.user
+    const targetRole = target.app_metadata?.role || 'client'
+    if (isProtectedOwnerAccount(target)) return response(res, 403, { error: 'La cuenta propietaria está protegida y no puede eliminarse desde el panel.' })
+    if (!isOwner && targetRole !== 'client' && targetRole !== 'team') {
+      return response(res, 403, { error: 'Los administradores solo pueden eliminar cuentas de clientes o equipo.' })
+    }
+    if (!['client', 'team', 'admin'].includes(targetRole)) return response(res, 403, { error: 'Este tipo de cuenta no puede eliminarse desde el panel.' })
+
+    const { error: deleteError } = await admin.auth.admin.deleteUser(userId, true)
+    if (deleteError) return response(res, 502, { error: 'No se pudo eliminar la cuenta. No se modificaron sus proyectos.' })
+
+    await admin.from('activity_log').insert({
+      actor_id: actor.id,
+      entity_type: 'profile',
+      entity_id: userId,
+      action: 'deleted',
+      summary: `Cuenta eliminada: ${clean(target.email, 160)} (rol ${targetRole})`,
+    })
+    return response(res, 200, { ok: true, message: 'Cuenta eliminada. Los proyectos asignados se conservaron sin propietario asignado.' })
   }
 
   const userId = clean(body.userId, 64)
