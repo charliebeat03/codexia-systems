@@ -59,6 +59,10 @@ En el proyecto Supabase **Codexia Systems**:
 
 El SMTP predeterminado de Supabase solo permite entregar a direcciones autorizadas de la organización y tiene un límite muy bajo; no sirve como correo de producción para invitar a clientes externos.
 
+### Seguridad de contraseñas en el plan Free
+
+La protección de contraseñas filtradas de Supabase (HaveIBeenPwned) está disponible solo en Pro o superior, así que el aviso del Security Advisor no puede eliminarse en el plan Free sin cambiar de plan. No se debe fingir que está activada. Como mitigación sin coste, en **Authentication → Sign In / Providers → Email** establece una longitud mínima de 12 caracteres y exige mayúsculas, minúsculas, números y símbolos; conserva la confirmación de correo activada.
+
 ## DNS y entregabilidad
 
 SMTP2GO ofrece verificación de remitente individual, que no requiere cambiar los MX actuales. Si más adelante verificas el dominio completo, copia los registros SPF/DKIM exactos que muestre SMTP2GO. El dominio ya tiene SPF de Emayler: no publiques un segundo SPF independiente. Debe combinarse en un único registro TXT si el proveedor requiere añadir otro include. No elimines ni sustituyas los MX de Emayler ni el CNAME `tienda` de World Tree Shop.
