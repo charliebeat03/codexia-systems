@@ -107,3 +107,86 @@
   .portal-tabs{gap:5px}
   .portal-tabs button{padding:9px 10px;max-width:100%;overflow-wrap:anywhere}
 }
+ 
+
+/* Responsive form safeguards: public briefs, contact, and private portal. */
+.form-row,
+.portal-editor .form-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.form-row > label,
+.quote-form > label,
+.contact-form > label,
+.portal-editor > label,
+.portal-editor .form-row > label {
+  min-width: 0;
+  max-width: 100%;
+}
+.contact-layout > *,
+.quote-layout > *,
+.contact-form,
+.quote-form,
+.portal-editor,
+.portal-upload {
+  min-width: 0;
+  max-width: 100%;
+}
+.contact-form input,
+.contact-form select,
+.contact-form textarea,
+.quote-form input,
+.quote-form select,
+.quote-form textarea,
+.portal-editor input,
+.portal-editor select,
+.portal-editor textarea,
+.portal-upload input,
+.portal-upload select {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.contact-form .privacy-consent,
+.quote-form .privacy-consent {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.contact-form .privacy-consent span,
+.quote-form .privacy-consent span {
+  min-width: 0;
+}
+@media (max-width: 680px) {
+  .form-row,
+  .portal-editor .form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .contact-aside,
+  .contact-form,
+  .quote-aside,
+  .quote-form {
+    padding: 20px;
+  }
+  .form-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .quote-actions,
+  .form-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .quote-actions > *,
+  .form-actions > * {
+    width: 100%;
+    justify-content: center;
+  }
+}
+@media (max-width: 380px) {
+  .contact-aside,
+  .contact-form,
+  .quote-aside,
+  .quote-form {
+    padding: 16px;
+  }
+}
