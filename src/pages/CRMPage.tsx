@@ -92,9 +92,9 @@ export default function CRMPage() {
   async function createContact(e:FormEvent) {
     e.preventDefault(); if(!supabase||!user||!admin)return
     setBusy(true)
-    const values={...contactForm,organization_name:contactForm.organization_name.trim()||null,email:contactForm.email.trim()||null,phone:contactForm.phone.trim()||null,address:contactForm.address.trim()||null,tax_id:contactForm.tax_id.trim()||null,city:contactForm.city.trim()||null,country:contactForm.country.trim()||null,notes:contactForm.notes.trim()||null,created_by:user.id}
+    const values={...contactForm,organization_name:contactForm.organization_name.trim()||null,email:contactForm.email.trim()||null,phone:contactForm.phone.trim()||null,address:contactForm.address.trim()||null,tax_id:contactForm.tax_id.trim()||null,city:contactForm.city.trim()||null,country:contactForm.country.trim()||null,notes:contactForm.notes.trim()||null}
     const db=(supabase as any).from('crm_contacts')
-    const {error:e1}=editingContactId?await db.update(values).eq('id',editingContactId):await db.insert(values)
+    const {error:e1}=editingContactId?await db.update(values).eq('id',editingContactId):await db.insert({...values,created_by:user.id})
     setBusy(false); if(e1){setError(e1.message);return}
     setContactForm({contact_type:'individual',display_name:'',organization_name:'',email:'',phone:'',address:'',tax_id:'',city:'',country:'',notes:''});setEditingContactId(null)
     await finish(editingContactId?'Contacto actualizado correctamente.':'Contacto creado correctamente.')
