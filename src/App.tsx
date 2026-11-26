@@ -13,6 +13,7 @@ import QuotePage from './pages/QuotePage'
 import PrivacyPage from './pages/PrivacyPage'
 import AccessPage from './pages/AccessPage'
 import PortalPage from './pages/PortalPage'
+import CRMPage from './pages/CRMPage'
 import { AuthProvider } from './auth/AuthProvider'
 import { SiteFooter, SiteHeader } from './components/SiteShell'
 
@@ -32,6 +33,7 @@ const pageMeta: Record<string, { title: string; description: string }> = {
   '/privacidad': { title: 'Privacidad y datos | Codexia Systems', description: 'Información sobre los datos que se envían mediante los formularios de Codexia Systems y cómo se utilizan.' },
   '/acceso': { title: 'Acceso privado | Codexia Systems', description: 'Acceso privado para clientes y equipo de Codexia Systems.' },
   '/panel': { title: 'Mi espacio | Codexia Systems', description: 'Consulta tus proyectos, avances y documentos en Codexia Systems.' },
+  '/panel/crm': { title: 'CRM | Codexia Systems', description: 'Gestión comercial interna de Codexia Systems.' },
 }
 
 function RouteEffects() {
@@ -66,7 +68,7 @@ function RouteEffects() {
     setProperty('og:image', `${window.location.origin}/assets/codexia-social-preview.webp`)
     let robots = document.querySelector<HTMLMetaElement>('meta[name="robots"]')
     if (!robots) { robots = document.createElement('meta'); robots.name = 'robots'; document.head.appendChild(robots) }
-    robots.content = pathname === '/acceso' || pathname === '/panel' ? 'noindex, nofollow' : 'index, follow'
+    robots.content = pathname === '/acceso' || pathname.startsWith('/panel') ? 'noindex, nofollow' : 'index, follow'
     let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')
     if (!canonical) {
       canonical = document.createElement('link')
@@ -100,6 +102,7 @@ function AppRoutes() {
     <Route path="/presupuesto" element={<QuotePage />} />
     <Route path="/privacidad" element={<PrivacyPage />} />
     <Route path="/acceso" element={<AccessPage />} />
+    <Route path="/panel/crm" element={<CRMPage />} />
     <Route path="/panel" element={<PortalPage />} />
     <Route path="/servicios/:slug" element={<DetailPage />} />
     <Route path="/productos/:slug" element={<DetailPage />} />
