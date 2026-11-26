@@ -89,7 +89,7 @@ test('aplica el rate limit y guarda el lead antes de notificar', async () => {
     SUPABASE_URL: 'https://codexia-test.supabase.co',
     SUPABASE_SECRET_KEY: 'test-secret-only',
     SUPABASE_SERVICE_ROLE_KEY: null,
-    SMTP2GO_API_KEY: null,
+    MAILJET_API_KEY: null, MAILJET_SECRET_KEY: null,
     CONTACT_TO_EMAIL: null,
     CONTACT_FROM_EMAIL: null,
   }, async () => {
@@ -146,12 +146,12 @@ test('rechaza cuerpos excesivamente grandes', async () => {
   })
 })
 
-test('conserva el lead aunque falle la notificación de SMTP2GO', async () => {
+test('conserva el lead aunque falle la notificación de Mailjet', async () => {
   await withEnvironment({
     SUPABASE_URL: 'https://codexia-test.supabase.co',
     SUPABASE_SECRET_KEY: 'test-secret-only',
     SUPABASE_SERVICE_ROLE_KEY: null,
-    SMTP2GO_API_KEY: 'api-test-only',
+    MAILJET_API_KEY: 'api-test-only', MAILJET_SECRET_KEY: 'secret-test-only',
     CONTACT_TO_EMAIL: 'team@example.com',
     CONTACT_FROM_EMAIL: 'Codexia <noreply@example.com>',
   }, async () => {
@@ -160,7 +160,7 @@ test('conserva el lead aunque falle la notificación de SMTP2GO', async () => {
       calls.push(String(url))
       if (String(url).includes('/rpc/consume_contact_rate_limit')) return new Response('true', { status: 200 })
       if (String(url).endsWith('/rest/v1/leads')) return new Response(null, { status: 201 })
-      if (String(url) === 'https://api.smtp2go.com/v3/email/send') return new Response('mail provider unavailable', { status: 503 })
+      if (String(url) === 'https://api.mailjet.com/v3.1/send') return new Response('mail provider unavailable', { status: 503 })
       throw new Error(`URL inesperada: ${url}`)
     }
     const res = createResponse()
@@ -170,8 +170,8 @@ test('conserva el lead aunque falle la notificación de SMTP2GO', async () => {
     assert.deepEqual(res.payload.notification, { team: 'failed', customer: 'failed' })
     assert.equal(calls.length, 4)
     assert.ok(calls[1].endsWith('/rest/v1/leads'))
-    assert.equal(calls[2], 'https://api.smtp2go.com/v3/email/send')
-    assert.equal(calls[3], 'https://api.smtp2go.com/v3/email/send')
+    assert.equal(calls[2], 'https://api.mailjet.com/v3.1/send')
+    assert.equal(calls[3], 'https://api.mailjet.com/v3.1/send')
   })
 })
 
@@ -180,7 +180,7 @@ test('envía confirmación al cliente y aviso al equipo cuando el correo está c
     SUPABASE_URL: 'https://codexia-test.supabase.co',
     SUPABASE_SECRET_KEY: 'test-secret-only',
     SUPABASE_SERVICE_ROLE_KEY: null,
-    SMTP2GO_API_KEY: 'api-test-only',
+    MAILJET_API_KEY: 'api-test-only', MAILJET_SECRET_KEY: 'secret-test-only',
     CONTACT_TO_EMAIL: 'team@example.com',
     CONTACT_FROM_EMAIL: 'Codexia <noreply@example.com>',
   }, async () => {
@@ -188,9 +188,9 @@ test('envía confirmación al cliente y aviso al equipo cuando el correo está c
     globalThis.fetch = async (url, options) => {
       if (String(url).includes('/rpc/consume_contact_rate_limit')) return new Response('true', { status: 200 })
       if (String(url).endsWith('/rest/v1/leads')) return new Response(null, { status: 201 })
-      if (String(url) === 'https://api.smtp2go.com/v3/email/send') {
+      if (String(url) === 'https://api.mailjet.com/v3.1/send') {
         emails.push({ body: JSON.parse(options.body), headers: options.headers })
-        return new Response(JSON.stringify({ data: { succeeded: 1, failed: 0, failures: [] } }), { status: 200 })
+        return new Response(JSON.stringify({ Messages: [{ Status: 'success' }] }), { status: 200 })
       }
       throw new Error('URL inesperada: ' + url)
     }
