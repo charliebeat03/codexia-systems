@@ -180,7 +180,7 @@ export default function PortalPage() {
   async function deleteUser(profile:Profile) {
     if (!session || !admin || profile.id===user?.id || profile.role==='owner') return
     if (role!=='owner' && profile.role!=='client' && profile.role!=='team') return
-    const confirmed = window.confirm('¿Eliminar definitivamente la cuenta de ' + (profile.display_name || profile.email) + '? Sus proyectos se conservarán, pero quedarán sin cliente asignado. Esta acción no se puede deshacer.')
+    const confirmed = window.confirm('¿Eliminar definitivamente la cuenta de ' + (profile.display_name || profile.email) + '? Sus proyectos se conservarán, pero quedarán sin cliente asignado. Un token de sesión ya emitido podría seguir vigente hasta expirar. Esta acción no se puede deshacer.')
     if (!confirmed) return
     setInviteBusy(true);setError('');setFeedback('')
     try {
