@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Activity, ArrowLeft, BadgeDollarSign, BriefcaseBusiness, CalendarClock, Check, CircleAlert, ClipboardList, ContactRound, FileText, FolderPlus, Plus, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react'
+import { Activity, ArrowLeft, BadgeDollarSign, BriefcaseBusiness, Check, CircleAlert, ClipboardList, ContactRound, FileText, FolderPlus, Plus, Printer, RefreshCw, Search, ShieldCheck, Trash2, Users } from 'lucide-react'
 import { Link, Navigate } from 'react-router-dom'
 import { SiteFooter, SiteHeader } from '../components/SiteShell'
 import { useAuth } from '../auth/AuthProvider'
@@ -13,7 +13,9 @@ type PortalProfile = { id:string; email:string; display_name:string; role:string
 type Task = { id:string; contact_id:string|null; opportunity_id:string|null; title:string; priority:string; status:string; due_at:string|null; assigned_to:string|null }
 type ActivityRow = { id:string; contact_id:string|null; opportunity_id:string|null; activity_type:string; subject:string; body:string|null; occurred_at:string }
 type Service = { id:string; code:string; name:string; min_price:number|null; max_price:number|null; currency:string; pricing_note:string|null; active:boolean }
-type Quote = { id:string; quote_number:number; contact_id:string; status:string; currency:string; subtotal:number; discount:number; total:number; valid_until:string|null; created_at:string }
+type Quote = { id:string; quote_number:number; contact_id:string; opportunity_id:string|null; status:string; currency:string; subtotal:number; discount:number; total:number; valid_until:string|null; notes:string|null; created_at:string }
+type QuoteItem = { id:string; quote_id:string; service_id:string|null; description:string; quantity:number; unit_price:number; line_total:number; sort_order:number }
+type QuoteDraftItem = { description:string; quantity:string; unit_price:string }
 
 const tabs = [
   {id:'overview',label:'Resumen',icon:BriefcaseBusiness},
@@ -45,6 +47,8 @@ export default function CRMPage() {
   const [activities,setActivities] = useState<ActivityRow[]>([])
   const [services,setServices] = useState<Service[]>([])
   const [quotes,setQuotes] = useState<Quote[]>([])
+  const [quoteItems,setQuoteItems] = useState<QuoteItem[]>([])
+  const [printingQuoteId,setPrintingQuoteId] = useState<string|null>(null)
   const [search,setSearch] = useState('')
   const [busy,setBusy] = useState(false)
   const [error,setError] = useState('')
@@ -57,7 +61,7 @@ export default function CRMPage() {
   const [activityForm,setActivityForm] = useState({contact_id:'',activity_type:'note',subject:'',body:''})
   const [serviceForm,setServiceForm] = useState({code:'',name:'',min_price:'',max_price:'',pricing_note:''})
   const [editingServiceId,setEditingServiceId] = useState<string|null>(null)
-  const [quoteForm,setQuoteForm] = useState({contact_id:'',description:'',quantity:'1',unit_price:'',discount:'0',valid_until:''})
+  const [quoteForm,setQuoteForm] = useState({contact_id:'',opportunity_id:'',items:[{description:'',quantity:'1',unit_price:''}] as QuoteDraftItem[],discount:'0',valid_until:'',notes:''})
 
   const load = useCallback(async () => {
     if (!supabase || !user || !staff) return
@@ -73,17 +77,26 @@ export default function CRMPage() {
         db.from('crm_quotes').select('*').order('created_at',{ascending:false}).limit(500),
         db.from('leads').select('*').order('created_at',{ascending:false}).limit(500),
         db.from('profiles').select('id,email,display_name,role').order('display_name'),
+        db.from('crm_quote_items').select('*').order('sort_order'),
       ])
       const failed = results.find((r:any)=>r.error)
       if (failed?.error) throw failed.error
       setContacts(results[0].data||[]); setOpportunities(results[1].data||[]); setTasks(results[2].data||[])
-      setActivities(results[3].data||[]); setServices(results[4].data||[]); setQuotes(results[5].data||[]); setLeads(results[6].data||[]); setPortalProfiles(results[7].data||[])
+      setActivities(results[3].data||[]); setServices(results[4].data||[]); setQuotes(results[5].data||[]); setLeads(results[6].data||[]); setPortalProfiles(results[7].data||[]); setQuoteItems(results[8].data||[])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cargar el CRM. Comprueba la conexión y los permisos.')
     } finally { setBusy(false) }
   },[user,staff])
 
   useEffect(()=>{ if(!loading && staff) void load() },[loading,staff,load])
+
+  useEffect(()=>{
+    if(!printingQuoteId)return
+    const finishPrint=()=>setPrintingQuoteId(null)
+    window.addEventListener('afterprint',finishPrint,{once:true})
+    window.print()
+    return ()=>window.removeEventListener('afterprint',finishPrint)
+  },[printingQuoteId])
 
   const filteredContacts = useMemo(()=>contacts.filter(c=>[c.display_name,c.organization_name,c.email,c.phone,c.city].join(' ').toLowerCase().includes(search.toLowerCase())),[contacts,search])
   const contactName = (id:string|null) => contacts.find(c=>c.id===id)?.display_name || 'Contacto'
@@ -214,17 +227,22 @@ export default function CRMPage() {
   }
   async function createQuote(e:FormEvent) {
     e.preventDefault(); if(!supabase||!user||!admin)return
-    const quantity=Number(quoteForm.quantity),unit=Number(quoteForm.unit_price),discount=Number(quoteForm.discount||0)
-    if(quantity<=0||unit<0||discount>quantity*unit){setError('Revisa la cantidad, el precio y el descuento.');return}
-    setBusy(true)
-    const subtotal=Number((quantity*unit).toFixed(2)),total=Number((subtotal-discount).toFixed(2))
+    const items=quoteForm.items.map(item=>({description:item.description.trim(),quantity:Number(item.quantity),unit_price:Number(item.unit_price)}))
+    if(!items.length||items.some(item=>!item.description||item.description.length>240||!Number.isFinite(item.quantity)||item.quantity<=0||!Number.isFinite(item.unit_price)||item.unit_price<0)){
+      setError('Añade al menos una partida y revisa su descripción, cantidad y precio.');return
+    }
+    const subtotal=Number(items.reduce((sum,item)=>sum+item.quantity*item.unit_price,0).toFixed(2))
+    const discount=Number(quoteForm.discount||0)
+    if(!Number.isFinite(discount)||discount<0||discount>subtotal){setError('El descuento debe estar entre 0 y el subtotal.');return}
+    const total=Number((subtotal-discount).toFixed(2))
+    setBusy(true);setError('')
     const db=supabase as any
-    const {data,error:e1}=await db.from('crm_quotes').insert({contact_id:quoteForm.contact_id,currency:'USD',subtotal,discount,total,valid_until:quoteForm.valid_until||null,created_by:user.id}).select('id').single()
+    const {data,error:e1}=await db.from('crm_quotes').insert({contact_id:quoteForm.contact_id,opportunity_id:quoteForm.opportunity_id||null,currency:'USD',subtotal,discount,total,valid_until:quoteForm.valid_until||null,notes:quoteForm.notes.trim()||null,created_by:user.id}).select('id').single()
     if(e1){setBusy(false);setError(e1.message);return}
-    const {error:e2}=await db.from('crm_quote_items').insert({quote_id:data.id,description:quoteForm.description,quantity,unit_price:unit})
-    if(e2){await db.from('crm_quotes').delete().eq('id',data.id);setBusy(false);setError(e2.message);return}
-    setBusy(false);setQuoteForm({contact_id:'',description:'',quantity:'1',unit_price:'',discount:'0',valid_until:''})
-    await finish('Presupuesto creado como borrador.')
+    const {error:e2}=await db.from('crm_quote_items').insert(items.map((item,index)=>({...item,quote_id:data.id,sort_order:(index+1)*10})))
+    if(e2){const {error:rollbackError}=await db.from('crm_quotes').delete().eq('id',data.id);setBusy(false);setError('No se pudieron guardar las partidas. '+(rollbackError?'El borrador quedó creado y requiere revisión manual.':'Se revirtió el borrador para evitar un presupuesto incompleto.')+' Detalle: '+e2.message);return}
+    setBusy(false);setQuoteForm({contact_id:'',opportunity_id:'',items:[{description:'',quantity:'1',unit_price:''}],discount:'0',valid_until:'',notes:''})
+    await finish('Presupuesto creado como borrador con '+items.length+' partida(s).')
   }
   async function updateRow(table:string,id:string,values:Record<string,unknown>,message:string) {
     if(!supabase||!admin)return
@@ -267,8 +285,9 @@ export default function CRMPage() {
       <div className="crm-timeline">{activities.map(a=><article key={a.id}><span className="crm-timeline-dot"/><div><small>{dateText(a.occurred_at)} · {contactName(a.contact_id)}</small><h3>{a.subject}</h3><p>{a.body||a.activity_type}</p></div></article>)}{!activities.length&&<p className="crm-empty">El historial está vacío.</p>}</div>
     </section>}
     {tab==='quotes'&&<section className="crm-content"><div className="crm-section-head"><div><h2>Presupuestos</h2><p>Propuestas comerciales con partidas, descuentos y vigencia.</p></div>{admin&&<button className="crm-button primary" onClick={()=>setShowForm(v=>!v)}><Plus size={16}/> Nuevo presupuesto</button>}</div>
-      {showForm&&admin&&<form className="crm-form" onSubmit={createQuote}><h3>Crear presupuesto</h3><div className="crm-form-grid"><label>Contacto *<select required value={quoteForm.contact_id} onChange={e=>setQuoteForm(v=>({...v,contact_id:e.target.value}))}><option value="">Seleccionar</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.display_name}</option>)}</select></label><label>Concepto / servicio *<input required value={quoteForm.description} onChange={e=>setQuoteForm(v=>({...v,description:e.target.value}))}/></label><label>Cantidad<input required type="number" min="0.01" step="0.01" value={quoteForm.quantity} onChange={e=>setQuoteForm(v=>({...v,quantity:e.target.value}))}/></label><label>Precio unitario (USD)<input required type="number" min="0" step="0.01" value={quoteForm.unit_price} onChange={e=>setQuoteForm(v=>({...v,unit_price:e.target.value}))}/></label><label>Descuento (USD)<input type="number" min="0" step="0.01" value={quoteForm.discount} onChange={e=>setQuoteForm(v=>({...v,discount:e.target.value}))}/></label><label>Válido hasta<input type="date" value={quoteForm.valid_until} onChange={e=>setQuoteForm(v=>({...v,valid_until:e.target.value}))}/></label></div><div className="crm-form-actions"><button className="crm-button primary" disabled={busy||!contacts.length}>Guardar borrador</button><button type="button" className="crm-button secondary" onClick={()=>setShowForm(false)}>Cancelar</button></div></form>}
-      <div className="crm-card-list">{quotes.map(q=><article className="crm-record-card" key={q.id}><div className="crm-record-main"><span className="crm-record-kicker">Presupuesto #{q.quote_number}</span><h3>{contactName(q.contact_id)}</h3><p>Creado: {dateText(q.created_at)} · {q.valid_until?'Válido hasta '+dateText(q.valid_until):'Sin vencimiento definido'}</p></div><div className="crm-record-controls"><strong>{money(q.total,q.currency)}</strong>{admin?<select value={q.status} disabled={busy} onChange={e=>void updateRow('crm_quotes',q.id,{status:e.target.value},'Estado del presupuesto actualizado.')}><option value="draft">Borrador</option><option value="sent">Enviado</option><option value="accepted">Aceptado</option><option value="rejected">Rechazado</option><option value="expired">Vencido</option><option value="cancelled">Cancelado</option></select>:<span>{q.status}</span>}</div></article>)}{!quotes.length&&<p className="crm-empty">No hay presupuestos creados.</p>}</div>
+      {showForm&&admin&&<form className="crm-form" onSubmit={createQuote}><h3>Crear presupuesto</h3><div className="crm-form-grid"><label>Contacto *<select required value={quoteForm.contact_id} onChange={e=>setQuoteForm(v=>({...v,contact_id:e.target.value,opportunity_id:''}))}><option value="">Seleccionar</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.display_name}</option>)}</select></label><label>Oportunidad relacionada (opcional)<select value={quoteForm.opportunity_id} onChange={e=>setQuoteForm(v=>({...v,opportunity_id:e.target.value}))}><option value="">Sin asociar</option>{opportunities.filter(o=>o.contact_id===quoteForm.contact_id).map(o=><option key={o.id} value={o.id}>{o.title}</option>)}</select></label></div><div className="crm-quote-editor"><div className="crm-quote-editor-head"><h4>Partidas del presupuesto</h4><button type="button" className="crm-button secondary small" onClick={()=>setQuoteForm(v=>({...v,items:[...v.items,{description:'',quantity:'1',unit_price:''}]}))}><Plus size={14}/> Añadir partida</button></div>{quoteForm.items.map((item,index)=><div className="crm-quote-line" key={index}><label>Concepto / servicio<input required maxLength={240} value={item.description} onChange={e=>setQuoteForm(v=>({...v,items:v.items.map((line,i)=>i===index?{...line,description:e.target.value}:line)}))}/></label><label>Cantidad<input required type="number" min="0.01" step="0.01" value={item.quantity} onChange={e=>setQuoteForm(v=>({...v,items:v.items.map((line,i)=>i===index?{...line,quantity:e.target.value}:line)}))}/></label><label>Precio unitario (USD)<input required type="number" min="0" step="0.01" value={item.unit_price} onChange={e=>setQuoteForm(v=>({...v,items:v.items.map((line,i)=>i===index?{...line,unit_price:e.target.value}:line)}))}/></label><strong>{money((Number(item.quantity)||0)*(Number(item.unit_price)||0),'USD')}</strong>{quoteForm.items.length>1&&<button type="button" className="crm-icon-button" aria-label={'Eliminar partida '+(index+1)} onClick={()=>setQuoteForm(v=>({...v,items:v.items.filter((_,i)=>i!==index)}))}><Trash2 size={16}/></button>}</div>)}</div><div className="crm-form-grid"><label>Descuento global (USD)<input type="number" min="0" step="0.01" value={quoteForm.discount} onChange={e=>setQuoteForm(v=>({...v,discount:e.target.value}))}/></label><label>Válido hasta<input type="date" value={quoteForm.valid_until} onChange={e=>setQuoteForm(v=>({...v,valid_until:e.target.value}))}/></label><label className="wide">Notas / condiciones<textarea rows={3} value={quoteForm.notes} onChange={e=>setQuoteForm(v=>({...v,notes:e.target.value}))}/></label></div><div className="crm-quote-totals"><span>Subtotal: <strong>{money(quoteForm.items.reduce((sum,item)=>sum+(Number(item.quantity)||0)*(Number(item.unit_price)||0),0),'USD')}</strong></span><span>Descuento: <strong>{money(Number(quoteForm.discount)||0,'USD')}</strong></span><span>Total: <strong>{money(Math.max(0,quoteForm.items.reduce((sum,item)=>sum+(Number(item.quantity)||0)*(Number(item.unit_price)||0),0)-(Number(quoteForm.discount)||0)),'USD')}</strong></span></div><div className="crm-form-actions"><button className="crm-button primary" disabled={busy||!contacts.length}>Guardar borrador</button><button type="button" className="crm-button secondary" onClick={()=>setShowForm(false)}>Cancelar</button></div></form>}
+      <div className="crm-card-list">{quotes.map(q=><article className="crm-record-card" key={q.id}><div className="crm-record-main"><span className="crm-record-kicker">Presupuesto #{q.quote_number}</span><h3>{contactName(q.contact_id)}</h3><p>{q.opportunity_id?'Oportunidad: '+(opportunities.find(o=>o.id===q.opportunity_id)?.title||'Asociada')+' · ':''}Creado: {dateText(q.created_at)} · {q.valid_until?'Válido hasta '+dateText(q.valid_until):'Sin vencimiento definido'}</p><small>{quoteItems.filter(item=>item.quote_id===q.id).length} partida(s)</small></div><div className="crm-record-controls"><strong>{money(q.total,q.currency)}</strong>{admin?<select value={q.status} disabled={busy} onChange={e=>void updateRow('crm_quotes',q.id,{status:e.target.value},'Estado del presupuesto actualizado.')}><option value="draft">Borrador</option><option value="sent">Enviado</option><option value="accepted">Aceptado</option><option value="rejected">Rechazado</option><option value="expired">Vencido</option><option value="cancelled">Cancelado</option></select>:<span>{q.status}</span>}<button type="button" className="crm-button secondary small" onClick={()=>setPrintingQuoteId(q.id)}><Printer size={14}/> PDF / Imprimir</button></div></article>)}{!quotes.length&&<p className="crm-empty">No hay presupuestos creados.</p></div>
+      {printingQuoteId&&(()=>{const q=quotes.find(item=>item.id===printingQuoteId);if(!q)return null;const lines=quoteItems.filter(item=>item.quote_id===q.id);const contact=contacts.find(item=>item.id===q.contact_id);const opportunity=opportunities.find(item=>item.id===q.opportunity_id);return <section className="crm-print-sheet"><header><div><strong>CODEXIA SYSTEMS</strong><p>Transformamos Procesos en Soluciones</p></div><div><h1>Presupuesto #{q.quote_number}</h1><p>Fecha: {dateText(q.created_at)}</p></div></header><h2>{contact?.display_name||'Cliente'}</h2>{contact?.email&&<p>{contact.email}</p>}{contact?.phone&&<p>{contact.phone}</p>}{opportunity&&<p>Oportunidad: {opportunity.title}</p>}<table><thead><tr><th>Concepto</th><th>Cantidad</th><th>Precio unitario</th><th>Importe</th></tr></thead><tbody>{lines.map(line=><tr key={line.id}><td>{line.description}</td><td>{line.quantity}</td><td>{money(line.unit_price,q.currency)}</td><td>{money(line.line_total,q.currency)}</td></tr>)}</tbody></table><div className="crm-print-totals"><p>Subtotal: {money(q.subtotal,q.currency)}</p><p>Descuento: {money(q.discount,q.currency)}</p><h2>Total: {money(q.total,q.currency)}</h2></div>{q.valid_until&&<p>Válido hasta: {dateText(q.valid_until)}</p>}{q.notes&&<div><h3>Notas y condiciones</h3><p>{q.notes}</p></div>}<footer>Codexia Systems · Todos los derechos reservados.</footer></section>})()}
     </section>}
     {tab==='services'&&<section className="crm-content"><div className="crm-section-head"><div><h2>Catálogo de servicios y precios</h2><p>Precios de referencia editables por el propietario. Cada propuesta se ajusta al alcance real.</p></div></div>
       {owner&&<form className="crm-form" onSubmit={createService}><h3>{editingServiceId?"Editar servicio":"Añadir servicio"}</h3><div className="crm-form-grid"><label>Código único *<input required readOnly={!!editingServiceId} value={serviceForm.code} onChange={e=>setServiceForm(v=>({...v,code:e.target.value}))} placeholder="web-landing"/></label><label>Nombre *<input required value={serviceForm.name} onChange={e=>setServiceForm(v=>({...v,name:e.target.value}))}/></label><label>Precio mínimo (USD)<input type="number" min="0" step="0.01" value={serviceForm.min_price} onChange={e=>setServiceForm(v=>({...v,min_price:e.target.value}))}/></label><label>Precio máximo (USD)<input type="number" min="0" step="0.01" value={serviceForm.max_price} onChange={e=>setServiceForm(v=>({...v,max_price:e.target.value}))}/></label><label className="wide">Nota de valoración<input value={serviceForm.pricing_note} onChange={e=>setServiceForm(v=>({...v,pricing_note:e.target.value}))}/></label></div><div className="crm-form-actions"><button className="crm-button primary" disabled={busy}>{editingServiceId?"Guardar cambios":"Añadir al catálogo"}</button>{editingServiceId&&<button type="button" className="crm-button secondary" onClick={()=>{setEditingServiceId(null);setServiceForm({code:"",name:"",min_price:"",max_price:"",pricing_note:""})}}>Cancelar edición</button>}</div></form>}
