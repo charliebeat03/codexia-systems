@@ -77,31 +77,35 @@ async function saveLead(lead) {
 
 async function sendEmail({ to, from, subject, html, text, replyTo }) {
   try {
-    const response = await fetch('https://api.smtp2go.com/v3/email/send', {
+    const match = String(from).match(/^\s*(.*?)\s*<([^<>]+)>\s*$/)
+    const fromEmail = match ? match[2].trim() : String(from).trim()
+    const fromName = match ? match[1].replace(/^["']|["']$/g, '').trim() : 'Codexia Systems'
+    const message = {
+      From: { Email: fromEmail, Name: fromName || 'Codexia Systems' },
+      To: [{ Email: to }],
+      Subject: subject,
+      HTMLPart: html,
+      TextPart: text,
+      ...(replyTo ? { ReplyTo: { Email: replyTo } } : {}),
+    }
+    const credentials = Buffer.from(`${process.env.MAILJET_API_KEY}:${process.env.MAILJET_SECRET_KEY}`).toString('base64')
+    const response = await fetch('https://api.mailjet.com/v3.1/send', {
       method: 'POST',
       headers: {
-        'X-Smtp2go-Api-Key': process.env.SMTP2GO_API_KEY,
+        Authorization: `Basic ${credentials}`,
         'Content-Type': 'application/json',
         accept: 'application/json',
       },
-      body: JSON.stringify({
-        sender: from,
-        to: [to],
-        subject,
-        html_body: html,
-        text_body: text,
-        ...(replyTo ? { custom_headers: [{ header: 'Reply-To', value: replyTo }] } : {}),
-        fastaccept: true,
-      }),
+      body: JSON.stringify({ Messages: [message] }),
     })
     if (!response.ok) return 'failed'
     const result = await response.json()
-    return Number(result?.data?.succeeded) > 0 && Number(result?.data?.failed) === 0 ? 'sent' : 'failed'
+    return result?.Messages?.[0]?.Status === 'success' ? 'sent' : 'failed'
   } catch { return 'failed' }
 }
 
 async function sendNotification({ name, email, organization, service, budget, timing, details, features }) {
-  if (!process.env.SMTP2GO_API_KEY || !process.env.CONTACT_TO_EMAIL || !process.env.CONTACT_FROM_EMAIL) {
+  if (!process.env.MAILJET_API_KEY || process.env.MAILJET_SECRET_KEY || !process.env.CONTACT_TO_EMAIL || !process.env.CONTACT_FROM_EMAIL) {
     return { team: 'not_configured', customer: 'not_configured' }
   }
   const fields = [
