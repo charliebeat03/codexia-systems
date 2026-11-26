@@ -1,7 +1,7 @@
 # Checklist de calidad · Codexia Systems v1.10.2
 
 ## Código y configuración
-- [x] Versionado de paquete actualizado a 1.10.2.
+- [x] Versionado de paquete actualizado a 1.10.4.
 - [x] Dependencias directas fijadas en `package.json`.
 - [x] Variables de entorno de ejemplo sin secretos reales.
 - [x] Cliente frontend utiliza solo publishable key.
