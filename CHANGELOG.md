@@ -139,3 +139,12 @@
 ### Validation
 - `npm run verify`: passed (14 tests, API syntax checks passed).
 - Production frontend build: not executed in this environment because dependency installation did not complete. Re-run the Vercel Preview deployment to validate the complete TypeScript/Vite build.
+
+
+## v1.10.4 · Ciclo de vida de proyectos y usuarios
+- Añadido borrado administrativo de proyectos con validación de rol en servidor, eliminación de registros relacionados por FK y limpieza posterior del bucket privado.
+- Añadido borrado administrativo de cuentas: el propietario puede eliminar cuentas no propietarias; los administradores solo clientes y equipo.
+- La cuenta propietaria y la sesión del actor quedan protegidas; las cuentas con documentos subidos deben reasignar esos documentos antes de eliminarse.
+- El borrado de una cuenta conserva los proyectos asignados, que quedan sin cliente vinculado.
+- Completado y archivado siguen siendo estados de conservación, no borrado.
+- Pendiente validar las operaciones destructivas en un entorno aislado; no se han creado ni eliminado datos reales.
