@@ -89,7 +89,7 @@ test('aplica el rate limit y guarda el lead antes de notificar', async () => {
     SUPABASE_URL: 'https://codexia-test.supabase.co',
     SUPABASE_SECRET_KEY: 'test-secret-only',
     SUPABASE_SERVICE_ROLE_KEY: null,
-    RESEND_API_KEY: null,
+    SMTP2GO_API_KEY: null,
     CONTACT_TO_EMAIL: null,
     CONTACT_FROM_EMAIL: null,
   }, async () => {
@@ -146,12 +146,12 @@ test('rechaza cuerpos excesivamente grandes', async () => {
   })
 })
 
-test('conserva el lead aunque falle la notificación de Resend', async () => {
+test('conserva el lead aunque falle la notificación de SMTP2GO', async () => {
   await withEnvironment({
     SUPABASE_URL: 'https://codexia-test.supabase.co',
     SUPABASE_SECRET_KEY: 'test-secret-only',
     SUPABASE_SERVICE_ROLE_KEY: null,
-    RESEND_API_KEY: 're_test_only',
+    SMTP2GO_API_KEY: 'api-test-only',
     CONTACT_TO_EMAIL: 'team@example.com',
     CONTACT_FROM_EMAIL: 'Codexia <noreply@example.com>',
   }, async () => {
@@ -160,7 +160,7 @@ test('conserva el lead aunque falle la notificación de Resend', async () => {
       calls.push(String(url))
       if (String(url).includes('/rpc/consume_contact_rate_limit')) return new Response('true', { status: 200 })
       if (String(url).endsWith('/rest/v1/leads')) return new Response(null, { status: 201 })
-      if (String(url) === 'https://api.resend.com/emails') return new Response('mail provider unavailable', { status: 503 })
+      if (String(url) === 'https://api.smtp2go.com/v3/email/send') return new Response('mail provider unavailable', { status: 503 })
       throw new Error(`URL inesperada: ${url}`)
     }
     const res = createResponse()
@@ -170,8 +170,8 @@ test('conserva el lead aunque falle la notificación de Resend', async () => {
     assert.deepEqual(res.payload.notification, { team: 'failed', customer: 'failed' })
     assert.equal(calls.length, 4)
     assert.ok(calls[1].endsWith('/rest/v1/leads'))
-    assert.equal(calls[2], 'https://api.resend.com/emails')
-    assert.equal(calls[3], 'https://api.resend.com/emails')
+    assert.equal(calls[2], 'https://api.smtp2go.com/v3/email/send')
+    assert.equal(calls[3], 'https://api.smtp2go.com/v3/email/send')
   })
 })
 
@@ -180,7 +180,7 @@ test('envía confirmación al cliente y aviso al equipo cuando el correo está c
     SUPABASE_URL: 'https://codexia-test.supabase.co',
     SUPABASE_SECRET_KEY: 'test-secret-only',
     SUPABASE_SERVICE_ROLE_KEY: null,
-    RESEND_API_KEY: 're_test_only',
+    SMTP2GO_API_KEY: 'api-test-only',
     CONTACT_TO_EMAIL: 'team@example.com',
     CONTACT_FROM_EMAIL: 'Codexia <noreply@example.com>',
   }, async () => {
@@ -188,9 +188,9 @@ test('envía confirmación al cliente y aviso al equipo cuando el correo está c
     globalThis.fetch = async (url, options) => {
       if (String(url).includes('/rpc/consume_contact_rate_limit')) return new Response('true', { status: 200 })
       if (String(url).endsWith('/rest/v1/leads')) return new Response(null, { status: 201 })
-      if (String(url) === 'https://api.resend.com/emails') {
-        emails.push(JSON.parse(options.body))
-        return new Response(JSON.stringify({ id: 'email_test' }), { status: 200 })
+      if (String(url) === 'https://api.smtp2go.com/v3/email/send') {
+        emails.push({ body: JSON.parse(options.body), headers: options.headers })
+        return new Response(JSON.stringify({ data: { succeeded: 1, failed: 0, failures: [] } }), { status: 200 })
       }
       throw new Error('URL inesperada: ' + url)
     }
@@ -200,10 +200,12 @@ test('envía confirmación al cliente y aviso al equipo cuando el correo está c
     assert.deepEqual(res.payload.notification, { team: 'sent', customer: 'sent' })
     assert.match(res.payload.message, /1 a 3 días hábiles/i)
     assert.equal(emails.length, 2)
-    assert.deepEqual(emails.map(mail => mail.to[0]).sort(), ['cliente@example.com', 'team@example.com'])
-    const customerMail = emails.find(mail => mail.to[0] === 'cliente@example.com')
-    assert.match(customerMail.html, /Hemos recibido tu solicitud/)
-    assert.match(customerMail.html, /1 y 3 días hábiles|1 a 3 días hábiles/)
+    assert.deepEqual(emails.map(mail => mail.body.to[0]).sort(), ['cliente@example.com', 'team@example.com'])
+    assert.ok(emails.every(mail => mail.headers['X-Smtp2go-Api-Key'] === 'api-test-only'))
+    const customerMail = emails.find(mail => mail.body.to[0] === 'cliente@example.com').body
+    assert.match(customerMail.html_body, /Hemos recibido tu solicitud/)
+    assert.match(customerMail.text_body, /1 y 3 días hábiles|1 a 3 días hábiles/)
+    assert.equal(customerMail.fastaccept, true)
   })
 })
 
