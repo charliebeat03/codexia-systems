@@ -8,6 +8,11 @@ export function isProtectedOwnerAccount(user) {
   return user?.app_metadata?.role === 'owner'
 }
 
+export function canModifyUserRole(actorRole, targetRole) {
+  if (targetRole === 'owner') return false
+  return actorRole === 'owner' || targetRole !== 'admin'
+}
+
 function getAdminClient() {
   const url = clean(process.env.SUPABASE_URL, 300).replace(/\/$/, '')
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -147,7 +152,7 @@ export default async function handler(req, res) {
   const { data: targetData, error: targetError } = await admin.auth.admin.getUserById(userId)
   if (targetError || !targetData.user) return response(res, 404, { error: 'No se encontró la cuenta.' })
   if (isProtectedOwnerAccount(targetData.user)) return response(res, 403, { error: 'Las cuentas de propietario están protegidas y no pueden modificarse desde este endpoint.' })
-  if (!isOwner && targetData.user.app_metadata?.role === 'admin') return response(res, 403, { error: 'Solo el propietario puede modificar el rol de otro administrador.' })
+  if (!canModifyUserRole(actorRole, targetData.user.app_metadata?.role)) return response(res, 403, { error: 'Solo el propietario puede modificar el rol de otro administrador.' })
 
   const { error: updateError } = await admin.auth.admin.updateUserById(userId, {
     app_metadata: { ...(targetData.user.app_metadata || {}), role },
