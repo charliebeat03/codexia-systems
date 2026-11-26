@@ -43,7 +43,9 @@ Los tres archivos correspondientes están en `supabase/migrations/`. La historia
 
 El propietario inicial ya fue creado en Supabase Authentication. En la última verificación, su correo aparecía confirmado y el rol `owner` estaba sincronizado en `auth.users.raw_app_meta_data.role` y `public.profiles.role`. No volver a ejecutar el SQL de bootstrap ni crear otra cuenta propietaria.
 
-Cuando exista el Preview y se configuren las variables públicas, iniciar sesión en `/acceso` para obtener un JWT actualizado y comprobar que `/panel` reconoce el rol Propietario. La autorización del servidor y RLS se basan en `app_metadata.role`, nunca en `user_metadata`.
+El propietario ya inició sesión correctamente desde el Preview. Su perfil muestra el nombre `Carlos` en `public.profiles.display_name` y en los metadatos de Auth; el rol `owner` permanece sincronizado en Auth y perfiles. La autorización del servidor y RLS se basan en `app_metadata.role`, nunca en `user_metadata`.
+
+No se han creado proyectos ni cuentas cliente de prueba en la base real. Para validar la vista cliente habrá que invitar una cuenta de prueba y asignarle un proyecto; hacerlo solo cuando exista un plan de limpieza de esos datos.
 
 ## Variables de entorno en Vercel
 
