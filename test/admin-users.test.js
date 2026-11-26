@@ -24,7 +24,7 @@ test('admin users endpoint rejects unsupported HTTP methods', async () => {
   const res = createResponse()
   await handler({ method: 'GET', headers: {} }, res)
   assert.equal(res.statusCode, 405)
-  assert.equal(res.headers.Allow, 'POST, PATCH')
+  assert.equal(res.headers.Allow, 'POST, PATCH, DELETE')
 })
 
 test('admin users endpoint requires a bearer token', async () => {
