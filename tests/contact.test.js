@@ -202,7 +202,7 @@ test('envía confirmación al cliente y aviso al equipo cuando el correo está c
     assert.equal(emails.length, 2)
     assert.deepEqual(emails.map(mail => mail.body.Messages[0].To[0].Email).sort(), ['cliente@example.com', 'team@example.com'])
     assert.ok(emails.every(mail => mail.headers.Authorization === `Basic ${Buffer.from('api-test-only:secret-test-only').toString('base64')}`))
-    const customerMail = emails.find(mail => mail.body.Messages[0].To[0].Email === 'cliente@example.com').body
+    const customerMail = emails.find(mail => mail.body.Messages[0].To[0].Email === 'cliente@example.com').body.Messages[0]
     assert.match(customerMail.HTMLPart, /Hemos recibido tu solicitud/)
     assert.match(customerMail.TextPart, /1 y 3 días hábiles|1 a 3 días hábiles/)
   })
