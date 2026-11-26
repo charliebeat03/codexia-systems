@@ -113,7 +113,7 @@ export default async function handler(req, res) {
     }
     if (!['client', 'team', 'admin'].includes(targetRole)) return response(res, 403, { error: 'Este tipo de cuenta no puede eliminarse desde el panel.' })
 
-    const { error: deleteError } = await admin.auth.admin.deleteUser(userId, true)
+    const { error: deleteError } = await admin.auth.admin.deleteUser(userId)
     if (deleteError) return response(res, 502, { error: 'No se pudo eliminar la cuenta. No se modificaron sus proyectos.' })
 
     await admin.from('activity_log').insert({
