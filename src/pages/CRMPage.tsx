@@ -144,7 +144,7 @@ export default function CRMPage() {
       contact.email? `Correo: ${contact.email}`:null,
       opportunity.description?.trim()||null,
       opportunity.estimated_value!=null?`Valor comercial de referencia: ${money(opportunity.estimated_value,opportunity.currency)}`:null,
-    ].filter(Boolean).join('\\n\\n')
+    ].filter(Boolean).join('\n\n')
     const db=supabase as any
     const {data:project,error:createError}=await db.from('projects').insert({
       name:opportunity.title.trim().slice(0,120),
