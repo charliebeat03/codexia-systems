@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import handler, { isProtectedOwnerAccount } from '../api/admin/users.js'
+import handler, { canModifyUserRole, isProtectedOwnerAccount } from '../api/admin/users.js'
 
 function createResponse() {
   return {
@@ -32,4 +32,12 @@ test('admin users endpoint requires a bearer token', async () => {
   await handler({ method: 'PATCH', headers: {} }, res)
   assert.equal(res.statusCode, 401)
   assert.match(res.payload.error, /iniciar sesión/i)
+})
+
+test('only the owner can modify another administrator role', () => {
+  assert.equal(canModifyUserRole('admin', 'admin'), false)
+  assert.equal(canModifyUserRole('admin', 'team'), true)
+  assert.equal(canModifyUserRole('admin', 'client'), true)
+  assert.equal(canModifyUserRole('owner', 'admin'), true)
+  assert.equal(canModifyUserRole('owner', 'owner'), false)
 })
