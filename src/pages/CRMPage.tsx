@@ -6,7 +6,8 @@ import { useAuth } from '../auth/AuthProvider'
 import { isAdminRole, isStaffRole, supabase } from '../lib/supabase'
 import './crm-page.css'
 
-type Contact = { id:string; contact_type:'company'|'small_business'|'individual'; display_name:string; organization_name:string|null; email:string|null; phone:string|null; city:string|null; country:string|null; notes:string|null; created_at:string }
+type Contact = { id:string; contact_type:'company'|'small_business'|'individual'; display_name:string; organization_name:string|null; email:string|null; phone:string|null; address:string|null; tax_id:string|null; city:string|null; country:string|null; notes:string|null; created_at:string }
+type Lead = { id:string; name:string; email:string; organization:string|null; service:string; budget:string|null; timing:string|null; details:string; features:string|null; status:string; contact_id:string|null; created_at:string }
 type Opportunity = { id:string; contact_id:string; title:string; stage:string; estimated_value:number|null; currency:string; probability:number; expected_close_date:string|null; created_at:string }
 type Task = { id:string; contact_id:string|null; opportunity_id:string|null; title:string; priority:string; status:string; due_at:string|null; assigned_to:string|null }
 type ActivityRow = { id:string; contact_id:string|null; opportunity_id:string|null; activity_type:string; subject:string; body:string|null; occurred_at:string }
@@ -15,6 +16,7 @@ type Quote = { id:string; quote_number:number; contact_id:string; status:string;
 
 const tabs = [
   {id:'overview',label:'Resumen',icon:BriefcaseBusiness},
+  {id:'leads',label:'Consultas',icon:Users},
   {id:'contacts',label:'Contactos',icon:ContactRound},
   {id:'opportunities',label:'Oportunidades',icon:BadgeDollarSign},
   {id:'tasks',label:'Tareas',icon:ClipboardList},
@@ -35,6 +37,7 @@ export default function CRMPage() {
   const owner = role === 'owner'
   const [tab,setTab] = useState<Tab>('overview')
   const [contacts,setContacts] = useState<Contact[]>([])
+  const [leads,setLeads] = useState<Lead[]>([])
   const [opportunities,setOpportunities] = useState<Opportunity[]>([])
   const [tasks,setTasks] = useState<Task[]>([])
   const [activities,setActivities] = useState<ActivityRow[]>([])
@@ -45,7 +48,7 @@ export default function CRMPage() {
   const [error,setError] = useState('')
   const [notice,setNotice] = useState('')
   const [showForm,setShowForm] = useState(false)
-  const [contactForm,setContactForm] = useState({contact_type:'individual' as Contact['contact_type'],display_name:'',organization_name:'',email:'',phone:'',city:'',country:'',notes:''})
+  const [contactForm,setContactForm] = useState({contact_type:'individual' as Contact['contact_type'],display_name:'',organization_name:'',email:'',phone:'',address:'',tax_id:'',city:'',country:'',notes:''})
   const [opportunityForm,setOpportunityForm] = useState({contact_id:'',title:'',estimated_value:'',currency:'USD',probability:'20',expected_close_date:''})
   const [taskForm,setTaskForm] = useState({contact_id:'',title:'',priority:'normal',due_at:'',description:''})
   const [activityForm,setActivityForm] = useState({contact_id:'',activity_type:'note',subject:'',body:''})
@@ -65,11 +68,12 @@ export default function CRMPage() {
         db.from('crm_activities').select('*').order('occurred_at',{ascending:false}).limit(500),
         db.from('crm_service_catalog').select('*').order('sort_order').order('name'),
         db.from('crm_quotes').select('*').order('created_at',{ascending:false}).limit(500),
+        db.from('leads').select('*').order('created_at',{ascending:false}).limit(500),
       ])
       const failed = results.find((r:any)=>r.error)
       if (failed?.error) throw failed.error
       setContacts(results[0].data||[]); setOpportunities(results[1].data||[]); setTasks(results[2].data||[])
-      setActivities(results[3].data||[]); setServices(results[4].data||[]); setQuotes(results[5].data||[])
+      setActivities(results[3].data||[]); setServices(results[4].data||[]); setQuotes(results[5].data||[]); setLeads(results[6].data||[])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cargar el CRM. Comprueba la conexión y los permisos.')
     } finally { setBusy(false) }
@@ -87,10 +91,29 @@ export default function CRMPage() {
   async function createContact(e:FormEvent) {
     e.preventDefault(); if(!supabase||!user||!admin)return
     setBusy(true)
-    const {error:e1}=await (supabase as any).from('crm_contacts').insert({...contactForm,organization_name:contactForm.organization_name.trim()||null,email:contactForm.email.trim()||null,phone:contactForm.phone.trim()||null,city:contactForm.city.trim()||null,country:contactForm.country.trim()||null,notes:contactForm.notes.trim()||null,created_by:user.id})
+    const {error:e1}=await (supabase as any).from('crm_contacts').insert({...contactForm,organization_name:contactForm.organization_name.trim()||null,email:contactForm.email.trim()||null,phone:contactForm.phone.trim()||null,address:contactForm.address.trim()||null,tax_id:contactForm.tax_id.trim()||null,city:contactForm.city.trim()||null,country:contactForm.country.trim()||null,notes:contactForm.notes.trim()||null,created_by:user.id})
     setBusy(false); if(e1){setError(e1.message);return}
-    setContactForm({contact_type:'individual',display_name:'',organization_name:'',email:'',phone:'',city:'',country:'',notes:''})
+    setContactForm({contact_type:'individual',display_name:'',organization_name:'',email:'',phone:'',address:'',tax_id:'',city:'',country:'',notes:''})
     await finish('Contacto creado correctamente.')
+  }
+  async function convertLeadToContact(lead:Lead) {
+    if(!supabase||!user||!admin||lead.contact_id)return
+    setBusy(true);setError('')
+    const db=supabase as any
+    const {data,error:e1}=await db.from('crm_contacts').insert({
+      contact_type:lead.organization?'small_business':'individual',
+      display_name:lead.name,
+      organization_name:lead.organization||null,
+      email:lead.email,
+      source:'quote_form',
+      notes:[`Servicio solicitado: ${lead.service}`,lead.budget?`Presupuesto orientativo: ${lead.budget}`:null,lead.timing?`Plazo: ${lead.timing}`:null,lead.details,lead.features?`Necesidades: ${lead.features}`:null].filter(Boolean).join('\n\n'),
+      created_by:user.id,
+    }).select('id').single()
+    if(e1){setBusy(false);setError(e1.message);return}
+    const {error:e2}=await db.from('leads').update({contact_id:data.id}).eq('id',lead.id)
+    setBusy(false)
+    if(e2){setError('El contacto se creó, pero no se pudo vincular la consulta: '+e2.message);await load();return}
+    await finish('Consulta convertida en contacto y vinculada al CRM.')
   }
   async function createOpportunity(e:FormEvent) {
     e.preventDefault(); if(!supabase||!user||!admin)return
@@ -163,8 +186,9 @@ export default function CRMPage() {
       <section className="crm-panel"><div className="crm-panel-head"><h2>Próximas tareas</h2><button onClick={()=>setTab('tasks')}>Ver todas</button></div>{openTasks.slice(0,6).map(t=><div className="crm-task-row" key={t.id}><span className={'crm-priority '+t.priority}/><div><strong>{t.title}</strong><small>{contactName(t.contact_id)} · {dateText(t.due_at)}</small></div><span className="crm-muted">{taskStates.find(s=>s.value===t.status)?.label}</span></div>)}{!openTasks.length&&<p className="crm-empty">No hay tareas pendientes. Buen momento para planificar.</p>}</section></div>
       <section className="crm-panel"><div className="crm-panel-head"><h2>Acciones rápidas</h2></div><div className="crm-quick-actions"><button onClick={()=>{setTab('contacts');setShowForm(true)}}><Users/>Nuevo contacto</button><button onClick={()=>{setTab('opportunities');setShowForm(true)}}><BadgeDollarSign/>Nueva oportunidad</button><button onClick={()=>{setTab('tasks');setShowForm(true)}}><ClipboardList/>Crear tarea</button><button onClick={()=>{setTab('quotes');setShowForm(true)}}><FileText/>Nuevo presupuesto</button></div></section>
     </section>}
-    {tab==='contacts'&&<section className="crm-content"><div className="crm-section-head"><div><h2>Contactos</h2><p>Empresas, pequeños negocios y personas individuales tienen el mismo acceso al proceso comercial.</p></div><div className="crm-head-actions"><label className="crm-search"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar contacto…"/></label>{admin&&<button className="crm-button primary" onClick={()=>setShowForm(v=>!v)}><Plus size={16}/> Nuevo contacto</button>}</div></div>
-      {showForm&&admin&&<form className="crm-form" onSubmit={createContact}><h3>Registrar contacto</h3><div className="crm-form-grid"><label>Tipo de contacto<select value={contactForm.contact_type} onChange={e=>setContactForm(v=>({...v,contact_type:e.target.value as Contact['contact_type']}))}><option value="individual">Persona individual</option><option value="small_business">Pequeño negocio / emprendimiento</option><option value="company">Empresa</option></select></label><label>Nombre o razón social *<input required minLength={2} maxLength={160} value={contactForm.display_name} onChange={e=>setContactForm(v=>({...v,display_name:e.target.value}))}/></label><label>Nombre del negocio (opcional)<input value={contactForm.organization_name} onChange={e=>setContactForm(v=>({...v,organization_name:e.target.value}))}/></label><label>Correo<input type="email" value={contactForm.email} onChange={e=>setContactForm(v=>({...v,email:e.target.value}))}/></label><label>Teléfono<input value={contactForm.phone} onChange={e=>setContactForm(v=>({...v,phone:e.target.value}))}/></label><label>Ciudad<input value={contactForm.city} onChange={e=>setContactForm(v=>({...v,city:e.target.value}))}/></label><label>País<input value={contactForm.country} onChange={e=>setContactForm(v=>({...v,country:e.target.value}))}/></label><label className="wide">Notas<textarea rows={2} value={contactForm.notes} onChange={e=>setContactForm(v=>({...v,notes:e.target.value}))}/></label></div><div className="crm-form-actions"><button className="crm-button primary" disabled={busy}>Guardar contacto</button><button type="button" className="crm-button secondary" onClick={()=>setShowForm(false)}>Cancelar</button></div></form>}
+    {tab==='leads'&&<section className="crm-content"><div className="crm-section-head"><div><h2>Consultas recibidas</h2><p>Solicitudes del formulario público. Convierte una consulta en contacto para continuar su seguimiento.</p></div><span className="crm-muted">{leads.length} registradas</span></div><div className="crm-card-list">{leads.map(lead=><article className="crm-record-card" key={lead.id}><div className="crm-record-main"><span className="crm-record-kicker">{lead.service} · {dateText(lead.created_at)}</span><h3>{lead.name}</h3><p>{lead.email}{lead.organization?' · '+lead.organization:''}{lead.budget?' · '+lead.budget:''}</p><p>{lead.details}</p></div><div className="crm-record-controls">{lead.contact_id?<span className="crm-stage won">Vinculada: {contactName(lead.contact_id)}</span>:admin?<button className="crm-button primary" disabled={busy} onClick={()=>void convertLeadToContact(lead)}>Convertir en contacto</button>:<span className="crm-muted">Sin convertir</span>}</div></article>)}{!leads.length&&<p className="crm-empty">No hay consultas recibidas todavía.</p>}</div></section>}
+      {tab==='contacts'&&<section className="crm-content"><div className="crm-section-head"><div><h2>Contactos</h2><p>Empresas, pequeños negocios y personas individuales tienen el mismo acceso al proceso comercial.</p></div><div className="crm-head-actions"><label className="crm-search"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar contacto…"/></label>{admin&&<button className="crm-button primary" onClick={()=>setShowForm(v=>!v)}><Plus size={16}/> Nuevo contacto</button>}</div></div>
+      {showForm&&admin&&<form className="crm-form" onSubmit={createContact}><h3>Registrar contacto</h3><div className="crm-form-grid"><label>Tipo de contacto<select value={contactForm.contact_type} onChange={e=>setContactForm(v=>({...v,contact_type:e.target.value as Contact['contact_type']}))}><option value="individual">Persona individual</option><option value="small_business">Pequeño negocio / emprendimiento</option><option value="company">Empresa</option></select></label><label>Nombre o razón social *<input required minLength={2} maxLength={160} value={contactForm.display_name} onChange={e=>setContactForm(v=>({...v,display_name:e.target.value}))}/></label><label>Nombre del negocio (opcional)<input value={contactForm.organization_name} onChange={e=>setContactForm(v=>({...v,organization_name:e.target.value}))}/></label><label>Correo<input type="email" value={contactForm.email} onChange={e=>setContactForm(v=>({...v,email:e.target.value}))}/></label><label>Teléfono<input value={contactForm.phone} onChange={e=>setContactForm(v=>({...v,phone:e.target.value}))}/></label><label>Identificador fiscal (opcional)<input value={contactForm.tax_id} onChange={e=>setContactForm(v=>({...v,tax_id:e.target.value}))}/></label><label>Dirección (opcional)<input value={contactForm.address} onChange={e=>setContactForm(v=>({...v,address:e.target.value}))}/></label><label>Ciudad<input value={contactForm.city} onChange={e=>setContactForm(v=>({...v,city:e.target.value}))}/></label><label>País<input value={contactForm.country} onChange={e=>setContactForm(v=>({...v,country:e.target.value}))}/></label><label className="wide">Notas<textarea rows={2} value={contactForm.notes} onChange={e=>setContactForm(v=>({...v,notes:e.target.value}))}/></label></div><div className="crm-form-actions"><button className="crm-button primary" disabled={busy}>Guardar contacto</button><button type="button" className="crm-button secondary" onClick={()=>setShowForm(false)}>Cancelar</button></div></form>}
       <div className="crm-table-wrap"><table className="crm-table"><thead><tr><th>Contacto</th><th>Tipo</th><th>Correo / teléfono</th><th>Ubicación</th><th>Registro</th></tr></thead><tbody>{filteredContacts.map(c=><tr key={c.id}><td><strong>{c.display_name}</strong>{c.organization_name&&<small>{c.organization_name}</small>}</td><td>{c.contact_type==='individual'?'Persona':c.contact_type==='small_business'?'Pequeño negocio':'Empresa'}</td><td>{c.email||'Sin correo'}<small>{c.phone||'Sin teléfono'}</small></td><td>{[c.city,c.country].filter(Boolean).join(', ')||'No indicada'}</td><td>{dateText(c.created_at)}</td></tr>)}</tbody></table>{!filteredContacts.length&&<p className="crm-empty">No hay contactos que coincidan con la búsqueda.</p>}</div>
     </section>}
     {tab==='opportunities'&&<section className="crm-content"><div className="crm-section-head"><div><h2>Oportunidades</h2><p>Da seguimiento al ciclo comercial desde el primer contacto hasta el cierre.</p></div>{admin&&<button className="crm-button primary" onClick={()=>setShowForm(v=>!v)}><Plus size={16}/> Nueva oportunidad</button>}</div>
