@@ -200,12 +200,11 @@ test('envía confirmación al cliente y aviso al equipo cuando el correo está c
     assert.deepEqual(res.payload.notification, { team: 'sent', customer: 'sent' })
     assert.match(res.payload.message, /1 a 3 días hábiles/i)
     assert.equal(emails.length, 2)
-    assert.deepEqual(emails.map(mail => mail.body.to[0]).sort(), ['cliente@example.com', 'team@example.com'])
-    assert.ok(emails.every(mail => mail.headers['X-Smtp2go-Api-Key'] === 'api-test-only'))
+    assert.deepEqual(emails.map(mail => mail.body.To[0].Email).sort(), ['cliente@example.com', 'team@example.com'])
+    assert.ok(emails.every(mail => mail.headers.Authorization === `Basic ${Buffer.from('api-test-only:secret-test-only').toString('base64')}`))
     const customerMail = emails.find(mail => mail.body.to[0] === 'cliente@example.com').body
-    assert.match(customerMail.html_body, /Hemos recibido tu solicitud/)
-    assert.match(customerMail.text_body, /1 y 3 días hábiles|1 a 3 días hábiles/)
-    assert.equal(customerMail.fastaccept, true)
+    assert.match(customerMail.HTMLPart, /Hemos recibido tu solicitud/)
+    assert.match(customerMail.TextPart, /1 y 3 días hábiles|1 a 3 días hábiles/)
   })
 })
 
