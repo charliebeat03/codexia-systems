@@ -4,6 +4,10 @@ const allowedRoles = new Set(['client', 'team', 'admin'])
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const clean = (value, max = 160) => String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max)
 
+export function isProtectedOwnerAccount(user) {
+  return user?.app_metadata?.role === 'owner'
+}
+
 function getAdminClient() {
   const url = clean(process.env.SUPABASE_URL, 300).replace(/\/$/, '')
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -105,7 +109,7 @@ export default async function handler(req, res) {
 
   const { data: targetData, error: targetError } = await admin.auth.admin.getUserById(userId)
   if (targetError || !targetData.user) return response(res, 404, { error: 'No se encontró la cuenta.' })
-  if (targetData.user.app_metadata?.role === 'owner') return response(res, 403, { error: 'Las cuentas de propietario están protegidas. Usa el procedimiento de recuperación de propietario.' })
+  if (isProtectedOwnerAccount(targetData.user)) return response(res, 403, { error: 'Las cuentas de propietario están protegidas. Usa el procedimiento de recuperación de propietario.' })
 
   const { error: updateError } = await admin.auth.admin.updateUserById(userId, {
     app_metadata: { ...(targetData.user.app_metadata || {}), role },
