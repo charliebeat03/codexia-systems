@@ -20,13 +20,16 @@
 - [ ] Confirmar recarga directa de rutas internas en Preview.
 
 ## Formularios y API
-- [x] `api/contact.js`, `api/health.js` y `api/admin/users.js` superan `node --check`.
+- [x] `api/contact.js`, `api/health.js`, `api/admin/users.js` y `api/admin/projects.js` están incluidos en `node --check` (validación CI pendiente).
 - [x] 14 pruebas automatizadas con Node.js superadas.
 - [x] Validación de campos, consentimiento y honeypot.
 - [x] Rate limiting persistente por HMAC mediante RPC reservada a `service_role`.
 - [x] Endpoint de contacto preparado para insertar leads en `public.leads`.
 - [x] Endpoint `/api/health` para comprobar acceso al backend.
 - [x] API administrativa limita cuerpos a 8 KiB y rechaza JSON que no sea un objeto.
+- [x] Endpoints DELETE protegidos para proyectos y usuarios; protección de owner, permisos por rol y confirmación en interfaz.
+- [x] Eliminación de proyectos conserva auditoría y solicita limpieza de Storage; la cuenta no se elimina si figura como autora de documentos.
+- [ ] Verificar borrado completo en entorno de prueba, incluida limpieza de Storage y comportamiento de sesiones JWT.
 - [ ] Configurar variables públicas/privadas en Vercel Preview y probar llamadas reales.
 - [ ] Configurar Resend y verificar dominio remitente, si se desean notificaciones.
 - [ ] Probar rate limit concurrente en Preview.
