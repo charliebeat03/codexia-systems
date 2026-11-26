@@ -75,42 +75,34 @@ async function saveLead(lead) {
   }
 }
 
-async function sendNotification({ name, email, organization, service, budget, timing, details, features }) {
-  if (!process.env.RESEND_API_KEY || !process.env.CONTACT_TO_EMAIL || !process.env.CONTACT_FROM_EMAIL) {
-    return 'not_configured'
-  }
-
-  const fields = [
-    ['Nombre', name],
-    ['Correo', email],
-    ['Organización o proyecto', organization || 'No indicado'],
-    ['Servicio', service],
-    ['Presupuesto', budget || 'Por definir'],
-    ['Plazo', timing || 'No indicado'],
-    ['Descripción', details],
-    ['Funciones o necesidades', features || 'No indicadas'],
-  ]
-  const html = `<h2>Nueva solicitud desde Codexia Systems</h2>${fields.map(([label, value]) => `<p><b>${escapeHtml(label)}:</b><br>${escapeHtml(value).replace(/\n/g, '<br>')}</p>`).join('')}`
-
+async function sendEmail({ to, from, subject, html, replyTo }) {
   try {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: process.env.CONTACT_FROM_EMAIL,
-        to: [process.env.CONTACT_TO_EMAIL],
-        reply_to: email,
-        subject: `Nueva solicitud web: ${name} · ${service}`,
-        html,
-      }),
+      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: [to], ...(replyTo ? { reply_to: replyTo } : {}), subject, html }),
     })
     return response.ok ? 'sent' : 'failed'
-  } catch {
-    return 'failed'
+  } catch { return 'failed' }
+}
+
+async function sendNotification({ name, email, organization, service, budget, timing, details, features }) {
+  if (!process.env.RESEND_API_KEY || !process.env.CONTACT_TO_EMAIL || !process.env.CONTACT_FROM_EMAIL) {
+    return { team: 'not_configured', customer: 'not_configured' }
   }
+  const fields = [
+    ['Nombre', name], ['Correo', email], ['Organización o proyecto', organization || 'No indicado'],
+    ['Servicio', service], ['Presupuesto', budget || 'Por definir'], ['Plazo', timing || 'No indicado'],
+    ['Descripción', details], ['Funciones o necesidades', features || 'No indicadas'],
+  ]
+  const fieldHtml = fields.map(([label, value]) => `<p><b>${escapeHtml(label)}:</b><br>${escapeHtml(value).replace(/\n/g, '<br>')}</p>`).join('')
+  const teamHtml = `<h2>Nueva solicitud desde Codexia Systems</h2>${fieldHtml}`
+  const customerHtml = `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#17221f;max-width:640px;margin:auto"><h2 style="color:#087b68">Hemos recibido tu solicitud</h2><p>Hola ${escapeHtml(name)},</p><p>Gracias por contactar con <b>Codexia Systems</b>. Tu solicitud quedó registrada correctamente y nuestro equipo revisará la información.</p><p><b>Plazo estimado de respuesta:</b> normalmente entre 1 y 3 días hábiles. Si necesitamos aclarar algún detalle, te escribiremos a esta misma dirección.</p><p>Esta confirmación solo acredita la recepción de tu consulta; todavía no constituye una cotización definitiva ni la aceptación de un proyecto.</p><p>Conserva este correo como referencia. Puedes responder directamente a este mensaje si deseas añadir información.</p><p>Saludos,<br><b>Equipo de Codexia Systems</b><br>Transformamos Procesos en Soluciones.</p></div>`
+  const [team, customer] = await Promise.all([
+    sendEmail({ to: process.env.CONTACT_TO_EMAIL, from: process.env.CONTACT_FROM_EMAIL, replyTo: email, subject: `Nueva solicitud web: ${name} · ${service}`, html: teamHtml }),
+    sendEmail({ to: email, from: process.env.CONTACT_FROM_EMAIL, subject: 'Hemos recibido tu solicitud · Codexia Systems', html: customerHtml }),
+  ])
+  return { team, customer }
 }
 
 export default async function handler(req, res) {
@@ -181,9 +173,9 @@ export default async function handler(req, res) {
 
   const notification = await sendNotification({ name, email, organization, service, budget, timing, details, features })
 
-  const message = notification === 'sent'
-    ? 'Tu solicitud quedó registrada y se envió una notificación al equipo de Codexia Systems.'
-    : 'Tu solicitud quedó registrada correctamente. La notificación por correo todavía no está disponible, pero conservamos tu consulta para revisarla.'
+  const message = notification.customer === 'sent'
+    ? 'Tu solicitud quedó registrada. Te enviamos una confirmación a tu correo y el equipo de Codexia Systems revisará la información. Normalmente responderemos en 1 a 3 días hábiles.'
+    : 'Tu solicitud quedó registrada y la conservamos para revisarla. Nuestro equipo normalmente responde en 1 a 3 días hábiles. La confirmación por correo todavía no está disponible, pero eso no afecta el registro de tu consulta.'
 
   return res.status(201).json({ ok: true, message, notification })
 }
