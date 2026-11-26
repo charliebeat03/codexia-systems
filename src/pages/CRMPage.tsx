@@ -89,7 +89,12 @@ export default function CRMPage() {
   const contactName = (id:string|null) => contacts.find(c=>c.id===id)?.display_name || 'Contacto'
   const openTasks = tasks.filter(t=>t.status==='pending'||t.status==='in_progress')
   const won = opportunities.filter(o=>o.stage==='won')
-  const pipeline = opportunities.filter(o=>!['won','lost'].includes(o.stage)).reduce((sum,o)=>sum+Number(o.estimated_value||0),0)
+  const formatOpportunityTotal = (rows:Opportunity[]) => {
+    const totals = new Map<string,number>()
+    rows.forEach(row=>{if(row.estimated_value!=null)totals.set(row.currency,(totals.get(row.currency)||0)+Number(row.estimated_value))})
+    return [...totals.entries()].map(([currency,total])=>money(total,currency)).join(' · ') || 'Por definir'
+  }
+  const pipeline = formatOpportunityTotal(opportunities.filter(o=>!['won','lost'].includes(o.stage)))
 
   async function finish(message:string) { setNotice(message); setError(''); setShowForm(false); await load() }
   async function createContact(e:FormEvent) {
@@ -239,7 +244,7 @@ export default function CRMPage() {
     {error&&<div className="crm-alert error"><CircleAlert size={17}/>{error}</div>}
     {notice&&<div className="crm-alert success"><Check size={17}/>{notice}</div>}
     {tab==='overview'&&<section className="crm-content">
-      <div className="crm-metrics"><article><span>Contactos</span><strong>{contacts.length}</strong><small>Personas y organizaciones</small></article><article><span>Oportunidades abiertas</span><strong>{opportunities.filter(o=>!['won','lost'].includes(o.stage)).length}</strong><small>Pipeline: {money(pipeline)}</small></article><article><span>Tareas pendientes</span><strong>{openTasks.length}</strong><small>Por completar</small></article><article><span>Ventas ganadas</span><strong>{won.length}</strong><small>Valor: {money(won.reduce((s,o)=>s+Number(o.estimated_value||0),0))}</small></article></div>
+      <div className="crm-metrics"><article><span>Contactos</span><strong>{contacts.length}</strong><small>Personas y organizaciones</small></article><article><span>Oportunidades abiertas</span><strong>{opportunities.filter(o=>!['won','lost'].includes(o.stage)).length}</strong><small>Pipeline: {pipeline}</small></article><article><span>Tareas pendientes</span><strong>{openTasks.length}</strong><small>Por completar</small></article><article><span>Ventas ganadas</span><strong>{won.length}</strong><small>Valor: {formatOpportunityTotal(won)}</small></article></div>
       <div className="crm-overview-grid"><section className="crm-panel"><div className="crm-panel-head"><h2>Oportunidades recientes</h2><button onClick={()=>setTab('opportunities')}>Ver todas</button></div>{opportunities.slice(0,5).map(o=><div className="crm-list-row" key={o.id}><div><strong>{o.title}</strong><small>{contactName(o.contact_id)}</small></div><span className={'crm-stage '+o.stage}>{stages.find(s=>s.value===o.stage)?.label||o.stage}</span><b>{money(o.estimated_value,o.currency)}</b></div>)}{!opportunities.length&&<p className="crm-empty">Todavía no hay oportunidades registradas.</p>}</section>
       <section className="crm-panel"><div className="crm-panel-head"><h2>Próximas tareas</h2><button onClick={()=>setTab('tasks')}>Ver todas</button></div>{openTasks.slice(0,6).map(t=><div className="crm-task-row" key={t.id}><span className={'crm-priority '+t.priority}/><div><strong>{t.title}</strong><small>{contactName(t.contact_id)} · {dateText(t.due_at)}</small></div><span className="crm-muted">{taskStates.find(s=>s.value===t.status)?.label}</span></div>)}{!openTasks.length&&<p className="crm-empty">No hay tareas pendientes. Buen momento para planificar.</p>}</section></div>
       <section className="crm-panel"><div className="crm-panel-head"><h2>Acciones rápidas</h2></div><div className="crm-quick-actions"><button onClick={()=>{setTab('contacts');setShowForm(true)}}><Users/>Nuevo contacto</button><button onClick={()=>{setTab('opportunities');setShowForm(true)}}><BadgeDollarSign/>Nueva oportunidad</button><button onClick={()=>{setTab('tasks');setShowForm(true)}}><ClipboardList/>Crear tarea</button><button onClick={()=>{setTab('quotes');setShowForm(true)}}><FileText/>Nuevo presupuesto</button></div></section>
