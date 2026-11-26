@@ -175,6 +175,38 @@ test('conserva el lead aunque falle la notificación de Resend', async () => {
   })
 })
 
+test('envía confirmación al cliente y aviso al equipo cuando el correo está configurado', async () => {
+  await withEnvironment({
+    SUPABASE_URL: 'https://codexia-test.supabase.co',
+    SUPABASE_SECRET_KEY: 'test-secret-only',
+    SUPABASE_SERVICE_ROLE_KEY: null,
+    RESEND_API_KEY: 're_test_only',
+    CONTACT_TO_EMAIL: 'team@example.com',
+    CONTACT_FROM_EMAIL: 'Codexia <noreply@example.com>',
+  }, async () => {
+    const emails = []
+    globalThis.fetch = async (url, options) => {
+      if (String(url).includes('/rpc/consume_contact_rate_limit')) return new Response('true', { status: 200 })
+      if (String(url).endsWith('/rest/v1/leads')) return new Response(null, { status: 201 })
+      if (String(url) === 'https://api.resend.com/emails') {
+        emails.push(JSON.parse(options.body))
+        return new Response(JSON.stringify({ id: 'email_test' }), { status: 200 })
+      }
+      throw new Error('URL inesperada: ' + url)
+    }
+    const res = createResponse()
+    await handler(createRequest({ body: validBody() }), res)
+    assert.equal(res.statusCode, 201)
+    assert.deepEqual(res.payload.notification, { team: 'sent', customer: 'sent' })
+    assert.match(res.payload.message, /1 a 3 días hábiles/i)
+    assert.equal(emails.length, 2)
+    assert.deepEqual(emails.map(mail => mail.to[0]).sort(), ['cliente@example.com', 'team@example.com'])
+    const customerMail = emails.find(mail => mail.to[0] === 'cliente@example.com')
+    assert.match(customerMail.html, /Hemos recibido tu solicitud/)
+    assert.match(customerMail.html, /1 y 3 días hábiles|1 a 3 días hábiles/)
+  })
+})
+
 test('rechaza cuerpos JSON que no son objetos', async () => {
   await withEnvironment({}, async () => {
     for (const body of ['null', '"texto"', '[]']) {
