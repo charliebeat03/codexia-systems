@@ -112,7 +112,7 @@ export default function CRMPage() {
     if(e1){setBusy(false);setError(e1.message);return}
     const {error:e2}=await db.from('leads').update({contact_id:data.id}).eq('id',lead.id)
     setBusy(false)
-    if(e2){setError('El contacto se creó, pero no se pudo vincular la consulta: '+e2.message);await load();return}
+    if(e2){await db.from('crm_contacts').delete().eq('id',data.id);setError('No se pudo vincular la consulta. Se revirtió el contacto creado: '+e2.message);await load();return}
     await finish('Consulta convertida en contacto y vinculada al CRM.')
   }
   async function createOpportunity(e:FormEvent) {
