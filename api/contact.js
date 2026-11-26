@@ -105,7 +105,7 @@ async function sendEmail({ to, from, subject, html, text, replyTo }) {
 }
 
 async function sendNotification({ name, email, organization, service, budget, timing, details, features }) {
-  if (!process.env.MAILJET_API_KEY || process.env.MAILJET_SECRET_KEY || !process.env.CONTACT_TO_EMAIL || !process.env.CONTACT_FROM_EMAIL) {
+  if (!process.env.MAILJET_API_KEY || !process.env.MAILJET_SECRET_KEY || !process.env.CONTACT_TO_EMAIL || !process.env.CONTACT_FROM_EMAIL) {
     return { team: 'not_configured', customer: 'not_configured' }
   }
   const fields = [
