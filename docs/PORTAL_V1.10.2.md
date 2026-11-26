@@ -72,7 +72,15 @@ Nunca crear `VITE_SUPABASE_SECRET_KEY` ni guardar secretos en GitHub. Configurar
 
 `POST /api/admin/users` invita una cuenta. Cuerpo: `{ "email": "...", "displayName": "...", "role": "client|team|admin" }`. El rol `admin` solo puede asignarlo `owner`.
 
-`PATCH /api/admin/users` cambia un rol. Cuerpo: `{ "userId": "UUID", "role": "client|team|admin" }`. Requiere `Authorization: Bearer <access_token>`. La función valida el token con Auth, comprueba `app_metadata.role` en servidor y usa la clave secreta solo desde Vercel.
+`PATCH /api/admin/users` cambia un rol. Cuerpo: `{ "userId": "UUID", "role": "client|team|admin" }`.
+
+`DELETE /api/admin/users` elimina una cuenta no propietaria. El propietario puede eliminar clientes, equipo y administradores; un administrador solo puede eliminar clientes y equipo. No se permite autoeliminación ni borrar al propietario. Si la cuenta ha subido documentos de proyectos, primero deben reasignarse para preservar los archivos. Los proyectos asignados se conservan y quedan sin cliente vinculado.
+
+`DELETE /api/admin/projects` elimina un proyecto y sus registros dependientes, y después intenta retirar los objetos del bucket privado. Si Storage no confirma la limpieza, la API devuelve una advertencia para revisión.
+
+Todos los endpoints requieren `Authorization: Bearer <access_token>`. La función valida el token con Auth, comprueba `app_metadata.role` en servidor y usa la clave secreta solo desde Vercel. Los botones destructivos piden confirmación en la interfaz. Las cuentas propietarias están protegidas.
+
+**Nota de sesiones:** Supabase no puede revocar un access token JWT ya emitido antes de que expire. La eliminación revoca la cuenta y sus refresh tokens, pero un access token ya emitido puede seguir siendo válido hasta su `exp`; hay que considerar esto en la política de expiración de JWT.
 
 No existe endpoint público para autoasignarse roles. Los propietarios no se crean ni promueven desde la interfaz.
 
