@@ -120,14 +120,16 @@ create table if not exists public.crm_quotes (
   status text not null default 'draft' check (status in ('draft','sent','accepted','rejected','expired','cancelled')),
   currency text not null default 'USD' check (currency ~ '^[A-Z]{3}$'),
   subtotal numeric(12,2) not null default 0 check (subtotal >= 0),
-  discount numeric(12,2) not null default 0 check (discount >= 0),
-  total numeric(12,2) not null default 0 check (total >= 0),
+  discount numeric(12,2) not null default 0,
+  total numeric(12,2) not null default 0,
   valid_until date,
   notes text,
   created_by uuid references public.profiles(id) on delete set null default auth.uid(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  constraint crm_quotes_discount_nonnegative check (discount >= 0),
   constraint crm_quotes_discount_check check (discount <= subtotal),
+  constraint crm_quotes_total_nonnegative check (total >= 0),
   constraint crm_quotes_total_check check (total = subtotal - discount)
 );
 
