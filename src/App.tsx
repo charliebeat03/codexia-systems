@@ -1,19 +1,19 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Link, Route, Routes, useLocation } from 'react-router-dom'
-import HomePage from './pages/HomePage'
-import { InternalPage } from './pages/InternalPage'
-import ContactPage from './pages/ContactPage'
-import DetailPage from './pages/DetailPage'
-import KnowledgePage from './pages/KnowledgePage'
-import FAQPage from './pages/FAQPage'
-import SupportPage from './pages/SupportPage'
-import EngagementPage from './pages/EngagementPage'
-import PortfolioPage from './pages/PortfolioPage'
-import QuotePage from './pages/QuotePage'
-import PrivacyPage from './pages/PrivacyPage'
-import AccessPage from './pages/AccessPage'
-import PortalPage from './pages/PortalPage'
-import CRMPage from './pages/CRMPage'
+const HomePage = lazy(() => import('./pages/HomePage'))
+const InternalPage = lazy(() => import('./pages/InternalPage').then(module => ({ default: module.InternalPage })))
+const ContactPage = lazy(() => import('./pages/ContactPage'))
+const DetailPage = lazy(() => import('./pages/DetailPage'))
+const KnowledgePage = lazy(() => import('./pages/KnowledgePage'))
+const FAQPage = lazy(() => import('./pages/FAQPage'))
+const SupportPage = lazy(() => import('./pages/SupportPage'))
+const EngagementPage = lazy(() => import('./pages/EngagementPage'))
+const PortfolioPage = lazy(() => import('./pages/PortfolioPage'))
+const QuotePage = lazy(() => import('./pages/QuotePage'))
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
+const AccessPage = lazy(() => import('./pages/AccessPage'))
+const PortalPage = lazy(() => import('./pages/PortalPage'))
+const CRMPage = lazy(() => import('./pages/CRMPage'))
 import { AuthProvider } from './auth/AuthProvider'
 import { SiteFooter, SiteHeader } from './components/SiteShell'
 
@@ -86,7 +86,7 @@ function NotFound() {
 }
 
 function AppRoutes() {
-  return <><RouteEffects /><Routes>
+  return <><RouteEffects /><Suspense fallback={<main className="section-wrap internal-main" role="status" aria-live="polite"><p className="internal-intro">Cargando sección…</p></main>}><Routes>
     <Route path="/" element={<HomePage />} />
     <Route path="/servicios" element={<InternalPage page="servicios" />} />
     <Route path="/productos" element={<InternalPage page="productos" />} />
@@ -108,7 +108,7 @@ function AppRoutes() {
     <Route path="/productos/:slug" element={<DetailPage />} />
     <Route path="/proyectos/:slug" element={<DetailPage />} />
     <Route path="*" element={<NotFound />} />
-  </Routes></>
+  </Routes></Suspense></>
 }
 
 export default function App() {
