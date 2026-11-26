@@ -113,6 +113,15 @@ export default async function handler(req, res) {
     }
     if (!['client', 'team', 'admin'].includes(targetRole)) return response(res, 403, { error: 'Este tipo de cuenta no puede eliminarse desde el panel.' })
 
+    const { count: ownedDocumentCount, error: documentCountError } = await admin
+      .from('project_documents')
+      .select('id', { count: 'exact', head: true })
+      .eq('uploaded_by', userId)
+    if (documentCountError) return response(res, 502, { error: 'No se pudo comprobar si la cuenta tiene documentos asociados.' })
+    if ((ownedDocumentCount || 0) > 0) {
+      return response(res, 409, { error: 'Esta cuenta ha subido documentos de proyectos. Reasigna esos documentos antes de eliminarla para no perder la propiedad de los archivos.' })
+    }
+
     const { error: deleteError } = await admin.auth.admin.deleteUser(userId)
     if (deleteError) return response(res, 502, { error: 'No se pudo eliminar la cuenta. No se modificaron sus proyectos.' })
 
