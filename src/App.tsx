@@ -13,7 +13,7 @@ const QuotePage = lazy(() => import('./pages/QuotePage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
 const AccessPage = lazy(() => import('./pages/AccessPage'))
 const PortalPage = lazy(() => import('./pages/PortalPage'))
-const CRMPage = lazy(() => import('./pages/CRMPage'))
+const CRMPage = lazy(() => import('./pages/CRMWorkspace'))
 import { AuthProvider } from './auth/AuthProvider'
 import { SiteFooter, SiteHeader } from './components/SiteShell'
 import SectionLoader from './components/SectionLoader'
