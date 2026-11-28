@@ -213,6 +213,38 @@ test('envía confirmación al cliente y aviso al equipo cuando el correo está c
   })
 })
 
+test('mantiene Emayler y la confirmación aunque Gmail rechace su envío', async () => {
+  await withEnvironment({
+    SUPABASE_URL: 'https://codexia-test.supabase.co',
+    SUPABASE_SECRET_KEY: 'test-secret-only',
+    SUPABASE_SERVICE_ROLE_KEY: null,
+    MAILJET_API_KEY: 'api-test-only', MAILJET_SECRET_KEY: 'secret-test-only',
+    CONTACT_TO_EMAIL: 'team@example.com',
+    CONTACT_CC_EMAIL: 'contact@codexiasystems.dpdns.org',
+    CONTACT_FROM_EMAIL: 'Codexia <noreply@example.com>',
+  }, async () => {
+    globalThis.fetch = async (url, options) => {
+      if (String(url).includes('/rpc/consume_contact_rate_limit')) return new Response('true', { status: 200 })
+      if (String(url).endsWith('/rest/v1/leads')) return new Response(null, { status: 201 })
+      if (String(url) === 'https://api.mailjet.com/v3.1/send') {
+        const message = JSON.parse(options.body).Messages[0]
+        if (message.To[0].Email === 'team@example.com') return new Response('Gmail recipient rejected', { status: 550 })
+        return new Response(JSON.stringify({ Messages: [{ Status: 'success' }] }), { status: 200 })
+      }
+      throw new Error('URL inesperada: ' + url)
+    }
+    const res = createResponse()
+    await handler(createRequest({ body: validBody() }), res)
+    assert.equal(res.statusCode, 201)
+    assert.deepEqual(res.payload.notification, {
+      team: 'partial',
+      recipients: { gmail: 'failed', emayler: 'sent' },
+      customer: 'sent',
+    })
+    assert.match(res.payload.message, /uno de los dos buzones/i)
+  })
+})
+
 test('rechaza cuerpos JSON que no son objetos', async () => {
   await withEnvironment({}, async () => {
     for (const body of ['null', '"texto"', '[]']) {
