@@ -1,7 +1,7 @@
 # Codexia Systems · Web corporativa
 
 ## Estado
-Versión de desarrollo v1.10.2. **Frontend y backend preparados para la primera revisión en Vercel Preview.** La base de datos dedicada de Supabase ya está creada, las migraciones están aplicadas y las verificaciones de esquema/RLS se completaron. La compilación completa sigue pendiente porque el registro npm no respondió en este entorno. No apuntar el dominio principal ni tratarla como producción hasta completar build, pruebas funcionales y revisión visual.
+Versión de desarrollo v1.10.4. **Preview compilado y desplegado en Vercel; CI y pruebas automatizadas correctas.** El proyecto Supabase existente está activo y las migraciones aplicadas. El dominio `codexiasystems.dpdns.org` ya está añadido al proyecto Vercel, pero aún requiere los registros DNS indicados en `docs/EMAIL_SETUP.md` y verificación. No se ha publicado a producción.
 
 ## Stack
 - React 18 + TypeScript + Vite
@@ -47,7 +47,7 @@ pnpm preview
 - Instagram, Facebook y GitHub ya enlazan a los perfiles oficiales proporcionados por el propietario. LinkedIn y YouTube permanecen opcionales y solo aparecerán cuando se configuren URLs HTTPS válidas.
 
 ## Formularios de contacto y presupuesto
-Los formularios validan campos en el navegador y en el servidor, exigen consentimiento explícito, incorporan un campo honeypot y permiten copiar un resumen alternativo. El endpoint `POST /api/contact` recibe ambos formularios, valida y guarda en Supabase CRM; después intenta enviar una notificación mediante Resend cuando se configuran las variables privadas de `.env.example`. El endpoint guarda primero cada solicitud en Supabase `leads` mediante una clave secreta exclusiva del servidor. La notificación Resend se intenta después; si el correo falla, la consulta permanece registrada y el formulario comunica ese estado. La migración incluye un limitador persistente por hash HMAC de IP, consumido mediante una función SQL cuyo permiso de ejecución se reserva al rol `service_role`. Debe probarse con solicitudes concurrentes en Supabase Preview antes de producción.
+Los formularios validan campos en el navegador y en el servidor, exigen consentimiento explícito, incorporan un campo honeypot y permiten copiar un resumen alternativo. El endpoint `POST /api/contact` recibe ambos formularios, valida y guarda en Supabase CRM; después intenta enviar mediante SMTP2GO un aviso al equipo y una confirmación al visitante cuando se configuran `SMTP2GO_API_KEY`, `CONTACT_TO_EMAIL` y `CONTACT_FROM_EMAIL` en Vercel. La solicitud se guarda primero en Supabase `leads`; si el correo falla, permanece registrada y el formulario comunica ese estado. La migración incluye un limitador persistente por hash HMAC de IP, consumido mediante una función SQL cuyo permiso de ejecución se reserva al rol `service_role`. Debe probarse con solicitudes concurrentes en Supabase Preview antes de producción.
 
 ## SEO y metadatos
 - Título y descripción por ruta.
@@ -76,11 +76,11 @@ Los formularios validan campos en el navegador y en el servidor, exigen consenti
 - `/acceso` permite iniciar sesión, recuperar contraseña y establecer contraseña tras invitación.
 - `/panel` presenta el CRM y gestión de proyectos al equipo, y el portal de seguimiento a cada cliente.
 - `POST /api/admin/users` invita cuentas; `PATCH /api/admin/users` modifica roles. Ambas operaciones validan el JWT en servidor y usan la clave secreta únicamente en Vercel.
-- Las migraciones remotas `20261124090443`, `20261124090454` y `20261124091542` están aplicadas en el proyecto Supabase `nzcqmuwxjuvfvcdcynjz`; sus archivos locales están alineados con esa historia.
+- Las migraciones remotas hasta `20261126161716` están aplicadas en el proyecto Supabase `nzcqmuwxjuvfvcdcynjz`; los archivos SQL están versionados en `supabase/migrations/`.
 - Las seis tablas públicas tienen RLS habilitado y hay 21 políticas registradas. La tabla privada de rate limit está protegida y la RPC solo concede ejecución a `service_role`.
 - El bucket `project-documents` es privado, con límite de 10 MB y tipos permitidos configurados.
 - El portal de clientes consulta proyectos asignados, actualizaciones con visibilidad `client` y documentos compartidos, protegidos por RLS y Storage.
-- El primer usuario ya fue creado, su correo está confirmado y su rol `owner` está sincronizado entre `auth.users.app_metadata` y `public.profiles`. El acceso desde la web queda pendiente de configurar las variables públicas y crear el primer Preview. Las pruebas funcionales de Auth, invitaciones y aislamiento siguen pendientes.
+- El usuario propietario existe y su rol `owner` está sincronizado entre `auth.users.app_metadata` y `public.profiles`. Las funciones de acceso, roles y formularios han sido probadas por el propietario. La entrega de correo externo sigue pendiente de configurar SMTP2GO en Vercel y Supabase Auth.
 - Se incorporaron tipos TypeScript del esquema y pruebas automatizadas de los endpoints de contacto y salud.
 
 Guía detallada: `docs/PORTAL_V1.10.2.md`.
@@ -89,8 +89,8 @@ Guía detallada: `docs/PORTAL_V1.10.2.md`.
 - Confirmar identidad legal del responsable y canal de contacto para privacidad.
 - Definir plazos de conservación de consultas.
 - Confirmar correo corporativo y WhatsApp si se desea mostrar un canal directo. Instagram, Facebook y GitHub ya están configurados; LinkedIn y YouTube son opcionales.
-- Configurar Resend, verificar el dominio remitente y definir el correo oficial de recepción.
-- Confirmar el dominio raíz y revisar DNS/HTTPS.
+- Crear la cuenta gratuita SMTP2GO, verificar el remitente y configurar sus credenciales siguiendo `docs/EMAIL_SETUP.md`.
+- Añadir en DigitalPlat los registros A y TXT de Vercel y verificar `codexiasystems.dpdns.org`.
 - Revisar y aprobar descripciones de servicios y proyectos.
 - Instalar dependencias, generar `pnpm-lock.yaml`, ejecutar `pnpm build` y probar en móviles y escritorio.
 - Comprobar contraste WCAG, navegación por teclado, zoom al 200% y lectores de pantalla.
@@ -156,8 +156,8 @@ Se incorpora `supabase/migrations/20261124090443_codexia_commercial_core.sql` y 
 
 La migración aplica RLS a todas las tablas, usa `app_metadata` para roles de autorización y concede acceso de Data API únicamente a `authenticated`. Revisar y probar las políticas con cuentas de roles distintos antes de producción.
 
-## Resend y correo
-No es necesario haber creado ya el buzón corporativo para preparar Resend. Para el envío real se necesita verificar el dominio remitente en Resend; el correo de destino puede ser temporalmente una dirección existente que controles. Configura las tres variables de entorno del archivo `.env.example` en un entorno privado, nunca en variables `VITE_*`.
+## Correo y autenticación
+Resend se retiró del endpoint. El envío de consultas y presupuestos utiliza SMTP2GO API; invitaciones, recuperación y confirmación de usuarios utilizan el SMTP personalizado de Supabase Auth. La configuración completa, límites del plan gratuito y pasos de DNS están en `docs/EMAIL_SETUP.md`. No usar el SMTP de Emayler: su API no permite enviar desde aplicaciones y no ofrece acceso SMTP/IMAP.
 
 
 ## v1.8.2 · Contacto y footer corporativo

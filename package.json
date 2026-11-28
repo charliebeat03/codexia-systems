@@ -1,15 +1,15 @@
 {
   "name": "codexia-systems-web",
   "private": true,
-  "version": "1.10.2",
+  "version": "1.10.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "node --test",
-    "check:api": "node --check api/contact.js && node --check api/health.js && node --check api/admin/users.js",
-    "verify": "node --check api/contact.js && node --check api/health.js && node --check api/admin/users.js && node --test"
+    "check:api": "node --check api/contact.js && node --check api/health.js && node --check api/admin/users.js && node --check api/admin/projects.js",
+    "verify": "node --check api/contact.js && node --check api/health.js && node --check api/admin/users.js && node --check api/admin/projects.js && node --test"
   },
   "dependencies": {
     "@vitejs/plugin-react": "4.3.4",

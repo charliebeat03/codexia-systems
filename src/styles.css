@@ -78,3 +78,123 @@
 @media(max-width:600px){.auth-card{padding:24px 20px}.portal-top{flex-direction:column}.portal-top-actions{width:100%;justify-content:space-between}.portal-stats{grid-template-columns:1fr 1fr}.portal-stats article:last-child{grid-column:1/-1}.portal-section-heading{align-items:flex-start;flex-direction:column}.portal-project-list{grid-template-columns:1fr}.portal-project-detail{padding:18px}.portal-project-detail-top{align-items:flex-start;flex-direction:column}.portal-editor .form-row{grid-template-columns:1fr}.portal-upload{grid-template-columns:1fr}.portal-upload button{grid-column:auto;width:100%;justify-content:center}.portal-document{align-items:flex-start}.portal-document .copy-button{padding:8px}.portal-lead-bottom{align-items:flex-start;flex-direction:column}.portal-lead-bottom select{max-width:none;width:100%}}
 .portal-user-list{display:grid;gap:8px}.portal-user-row{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:13px 15px;border:1px solid var(--line);border-radius:10px;background:rgba(12,24,44,.62)}.portal-user-row>div{display:grid;gap:5px;min-width:0}.portal-user-row strong{font-size:11px;color:#e3edfb}.portal-user-row small{font-size:9px;color:#8296b4;overflow-wrap:anywhere}.portal-user-row select{min-width:130px;padding:8px 10px;border:1px solid rgba(133,163,218,.24);border-radius:8px;background:#080f1e;color:#dce8f8;font-size:10px}.portal-user-row select:disabled{opacity:.55}
 @media(max-width:600px){.portal-user-row{align-items:flex-start;flex-direction:column}.portal-user-row select{width:100%}}
+
+/* Portal: prevent long account names and narrow-screen content from overflowing. */
+.portal-page{max-width:100%;overflow-x:clip}
+.portal-top>div:first-child{flex:1 1 420px;min-width:0;max-width:100%}
+.portal-top .internal-title{max-width:100%;overflow-wrap:anywhere}
+.portal-top .internal-intro{max-width:65ch;overflow-wrap:anywhere}
+.portal-top-actions{min-width:0;max-width:100%}
+.portal-page .portal-section,
+.portal-page .portal-section-heading,
+.portal-page .portal-project-detail,
+.portal-page .portal-editor,
+.portal-page .portal-stats article,
+.portal-page .portal-lead-card{min-width:0}
+.portal-page .portal-section-heading h2,
+.portal-page .portal-project-detail h3,
+.portal-page .portal-update-card,
+.portal-page .portal-bottom-note{overflow-wrap:anywhere}
+@media(max-width:600px){
+  .portal-page{padding-top:38px;padding-bottom:72px}
+  .portal-top{gap:17px;margin-bottom:22px}
+  .portal-top .internal-title{font-size:clamp(32px,9vw,43px);line-height:1.12;letter-spacing:-.045em}
+  .portal-top .internal-intro{font-size:13px;line-height:1.7}
+  .portal-top-actions{justify-content:flex-start;gap:8px}
+  .portal-top-actions .copy-button{white-space:normal;max-width:100%;padding:11px 12px}
+  .portal-stats{gap:9px}
+  .portal-stats article{padding:14px}
+  .portal-tabs{gap:5px}
+  .portal-tabs button{padding:9px 10px;max-width:100%;overflow-wrap:anywhere}
+}
+ 
+
+/* Responsive form safeguards: public briefs, contact, and private portal. */
+.form-row,
+.portal-editor .form-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.form-row > label,
+.quote-form > label,
+.contact-form > label,
+.portal-editor > label,
+.portal-editor .form-row > label {
+  min-width: 0;
+  max-width: 100%;
+}
+.contact-layout > *,
+.quote-layout > *,
+.contact-form,
+.quote-form,
+.portal-editor,
+.portal-upload {
+  min-width: 0;
+  max-width: 100%;
+}
+.contact-form input,
+.contact-form select,
+.contact-form textarea,
+.quote-form input,
+.quote-form select,
+.quote-form textarea,
+.portal-editor input,
+.portal-editor select,
+.portal-editor textarea,
+.portal-upload input,
+.portal-upload select {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.contact-form .privacy-consent,
+.quote-form .privacy-consent {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.contact-form .privacy-consent span,
+.quote-form .privacy-consent span {
+  min-width: 0;
+}
+@media (max-width: 680px) {
+  .form-row,
+  .portal-editor .form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .contact-aside,
+  .contact-form,
+  .quote-aside,
+  .quote-form {
+    padding: 20px;
+  }
+  .form-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .quote-actions,
+  .form-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .quote-actions > *,
+  .form-actions > * {
+    width: 100%;
+    justify-content: center;
+  }
+}
+@media (max-width: 380px) {
+  .contact-aside,
+  .contact-form,
+  .quote-aside,
+  .quote-form {
+    padding: 16px;
+  }
+}
+
+
+/* Accessible password visibility controls on sign-in and password recovery. */
+.auth-password-field{position:relative;display:block;width:100%;min-width:0}
+.auth-password-field input{box-sizing:border-box;width:100%;padding-right:48px}
+.auth-password-toggle{position:absolute;top:50%;right:7px;transform:translateY(-50%);display:grid;place-items:center;width:36px;height:36px;padding:0;border:0;border-radius:7px;background:transparent;color:#91a8c8;cursor:pointer}
+.auth-password-toggle:hover{background:rgba(0,212,255,.09);color:#70e2f7}
+.auth-password-toggle:focus-visible{outline:2px solid rgba(0,212,255,.75);outline-offset:2px}

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { ArrowLeft, KeyRound, LockKeyhole, Mail, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, KeyRound, LockKeyhole, Mail, ShieldCheck } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { SiteFooter, SiteHeader } from '../components/SiteShell'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
@@ -11,6 +11,8 @@ export default function AccessPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmation, setShowConfirmation] = useState(false)
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [success, setSuccess] = useState(false)
@@ -43,8 +45,8 @@ export default function AccessPage() {
   return <><SiteHeader/><main id="contenido" className="section-wrap editorial-page auth-page"><Link className="back-link" to="/"><ArrowLeft size={15}/> Volver al sitio</Link><div className="auth-card"><div className="auth-icon"><ShieldCheck size={25}/></div><div className="section-kicker">ÁREA PRIVADA / CODEXIA SYSTEMS</div><h1 className="internal-title">{mode === 'login' ? <>Accede a tu <em>espacio.</em></> : mode === 'new-password' ? <>Crea una nueva <em>contraseña.</em></> : <>Recuperar <em>acceso.</em></>}</h1><p className="internal-intro">{mode === 'login' ? 'Acceso exclusivo para clientes y miembros autorizados del equipo.' : mode === 'new-password' ? 'Elige una contraseña segura para proteger tu cuenta.' : 'Te enviaremos un enlace para restablecer tu contraseña.'}</p>
     {!isSupabaseConfigured ? <div className="auth-alert" role="status"><LockKeyhole size={18}/><div><strong>Autenticación todavía no conectada</strong><p>El acceso estará disponible cuando configuremos las variables públicas de Supabase en Vercel.</p></div></div> : <form className="auth-form" onSubmit={submit}>
       {mode !== 'new-password' && <label>Correo electrónico<input required type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@correo.com"/></label>}
-      {mode !== 'recovery' && <label>{mode === 'new-password' ? 'Nueva contraseña' : 'Contraseña'}<input required type="password" minLength={mode === 'new-password' ? 10 : 8} autoComplete={mode === 'new-password' ? 'new-password' : 'current-password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode === 'new-password' ? 'Mínimo 10 caracteres' : 'Tu contraseña'}/></label>}
-      {mode === 'new-password' && <label>Confirmar contraseña<input required type="password" minLength={10} autoComplete="new-password" value={confirmation} onChange={e=>setConfirmation(e.target.value)} placeholder="Repite la contraseña"/></label>}
+      {mode !== 'recovery' && <label>{mode === 'new-password' ? 'Nueva contraseña' : 'Contraseña'}<span className="auth-password-field"><input required type={showPassword ? 'text' : 'password'} minLength={mode === 'new-password' ? 10 : 8} autoComplete={mode === 'new-password' ? 'new-password' : 'current-password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode === 'new-password' ? 'Mínimo 10 caracteres' : 'Tu contraseña'}/><button className="auth-password-toggle" type="button" onClick={()=>setShowPassword(value=>!value)} aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'} aria-pressed={showPassword}>{showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}</button></span></label>}
+      {mode === 'new-password' && <label>Confirmar contraseña<span className="auth-password-field"><input required type={showConfirmation ? 'text' : 'password'} minLength={10} autoComplete="new-password" value={confirmation} onChange={e=>setConfirmation(e.target.value)} placeholder="Repite la contraseña"/><button className="auth-password-toggle" type="button" onClick={()=>setShowConfirmation(value=>!value)} aria-label={showConfirmation ? 'Ocultar confirmación' : 'Mostrar confirmación'} aria-pressed={showConfirmation}>{showConfirmation ? <EyeOff size={18}/> : <Eye size={18}/>}</button></span></label>}
       <button className="button button-primary" type="submit" disabled={busy}>{busy ? 'Procesando…' : mode === 'login' ? 'Iniciar sesión' : mode === 'new-password' ? 'Guardar contraseña' : 'Enviar instrucciones'} {mode === 'recovery' ? <Mail size={16}/> : <KeyRound size={16}/>}</button>
       {feedback && <p className={success?'auth-feedback success':'auth-feedback'} role="status">{feedback}</p>}
       {mode !== 'new-password' && <button type="button" className="auth-switch" onClick={()=>{setMode(mode==='login'?'recovery':'login');setFeedback('');setSuccess(false)}}>{mode==='login'?'¿Olvidaste tu contraseña?':'Volver al inicio de sesión'}</button>}

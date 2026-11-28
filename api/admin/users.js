@@ -4,6 +4,15 @@ const allowedRoles = new Set(['client', 'team', 'admin'])
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const clean = (value, max = 160) => String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max)
 
+export function isProtectedOwnerAccount(user) {
+  return user?.app_metadata?.role === 'owner'
+}
+
+export function canModifyUserRole(actorRole, targetRole) {
+  if (targetRole === 'owner') return false
+  return actorRole === 'owner' || targetRole !== 'admin'
+}
+
 function getAdminClient() {
   const url = clean(process.env.SUPABASE_URL, 300).replace(/\/$/, '')
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -22,8 +31,8 @@ function response(res, status, payload) {
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
   res.setHeader('Vary', 'Authorization')
-  if (req.method !== 'POST' && req.method !== 'PATCH') {
-    res.setHeader('Allow', 'POST, PATCH')
+  if (req.method !== 'POST' && req.method !== 'PATCH' && req.method !== 'DELETE') {
+    res.setHeader('Allow', 'POST, PATCH, DELETE')
     return response(res, 405, { error: 'Método no permitido.' })
   }
 
@@ -86,9 +95,49 @@ export default async function handler(req, res) {
     }
 
     const { error: profileError } = await admin.from('profiles').upsert({ id: data.user.id, email, display_name: displayName, role }, { onConflict: 'id' })
-    if (profileError) return response(res, 502, { error: 'La invitación se envió, pero no se pudo sincronizar el perfil. Revisa la cuenta desde Supabase.' })
+    if (profileError) {
+      await admin.auth.admin.deleteUser(data.user.id)
+      return response(res, 502, { error: 'No se pudo sincronizar el perfil. La invitación fue revertida.' })
+    }
     await admin.from('activity_log').insert({ actor_id: actor.id, entity_type: 'profile', entity_id: data.user.id, action: 'invited', summary: `Invitación creada para ${email} con rol ${role}` })
     return response(res, 201, { ok: true, message: 'Invitación enviada correctamente.' })
+  }
+
+  if (req.method === 'DELETE') {
+    const userId = clean(body.userId, 64)
+    if (!/^[0-9a-f-]{36}$/i.test(userId)) return response(res, 400, { error: 'Usuario no válido.' })
+    if (userId === actor.id) return response(res, 400, { error: 'No puedes eliminar tu propia cuenta desde esta pantalla.' })
+
+    const { data: targetData, error: targetError } = await admin.auth.admin.getUserById(userId)
+    if (targetError || !targetData.user) return response(res, 404, { error: 'No se encontró la cuenta.' })
+    const target = targetData.user
+    const targetRole = target.app_metadata?.role || 'client'
+    if (isProtectedOwnerAccount(target)) return response(res, 403, { error: 'La cuenta propietaria está protegida y no puede eliminarse desde el panel.' })
+    if (!isOwner && targetRole !== 'client' && targetRole !== 'team') {
+      return response(res, 403, { error: 'Los administradores solo pueden eliminar cuentas de clientes o equipo.' })
+    }
+    if (!['client', 'team', 'admin'].includes(targetRole)) return response(res, 403, { error: 'Este tipo de cuenta no puede eliminarse desde el panel.' })
+
+    const { count: ownedDocumentCount, error: documentCountError } = await admin
+      .from('project_documents')
+      .select('id', { count: 'exact', head: true })
+      .eq('uploaded_by', userId)
+    if (documentCountError) return response(res, 502, { error: 'No se pudo comprobar si la cuenta tiene documentos asociados.' })
+    if ((ownedDocumentCount || 0) > 0) {
+      return response(res, 409, { error: 'Esta cuenta ha subido documentos de proyectos. Reasigna esos documentos antes de eliminarla para no perder la propiedad de los archivos.' })
+    }
+
+    const { error: deleteError } = await admin.auth.admin.deleteUser(userId)
+    if (deleteError) return response(res, 502, { error: 'No se pudo eliminar la cuenta. No se modificaron sus proyectos.' })
+
+    await admin.from('activity_log').insert({
+      actor_id: actor.id,
+      entity_type: 'profile',
+      entity_id: userId,
+      action: 'deleted',
+      summary: `Cuenta eliminada: ${clean(target.email, 160)} (rol ${targetRole})`,
+    })
+    return response(res, 200, { ok: true, message: 'Cuenta eliminada. Los proyectos asignados se conservaron sin propietario asignado.' })
   }
 
   const userId = clean(body.userId, 64)
@@ -102,14 +151,18 @@ export default async function handler(req, res) {
 
   const { data: targetData, error: targetError } = await admin.auth.admin.getUserById(userId)
   if (targetError || !targetData.user) return response(res, 404, { error: 'No se encontró la cuenta.' })
-  if (targetData.user.app_metadata?.role === 'owner' && !isOwner) return response(res, 403, { error: 'Solo el propietario puede modificar esa cuenta.' })
+  if (isProtectedOwnerAccount(targetData.user)) return response(res, 403, { error: 'Las cuentas de propietario están protegidas y no pueden modificarse desde este endpoint.' })
+  if (!canModifyUserRole(actorRole, targetData.user.app_metadata?.role)) return response(res, 403, { error: 'Solo el propietario puede modificar el rol de otro administrador.' })
 
   const { error: updateError } = await admin.auth.admin.updateUserById(userId, {
     app_metadata: { ...(targetData.user.app_metadata || {}), role },
   })
   if (updateError) return response(res, 502, { error: 'No se pudo actualizar el rol.' })
   const { error: profileError } = await admin.from('profiles').upsert({ id: userId, email: targetData.user.email || '', display_name: targetData.user.user_metadata?.full_name || targetData.user.email || '', role }, { onConflict: 'id' })
-  if (profileError) return response(res, 502, { error: 'El rol de autenticación cambió, pero no se pudo sincronizar el perfil. Revisa el usuario desde Supabase.' })
+  if (profileError) {
+    await admin.auth.admin.updateUserById(userId, { app_metadata: targetData.user.app_metadata || {} })
+    return response(res, 502, { error: 'No se pudo sincronizar el perfil. Se revirtió el cambio de rol.' })
+  }
   await admin.from('activity_log').insert({ actor_id: actor.id, entity_type: 'profile', entity_id: userId, action: 'role_changed', summary: `Rol actualizado a ${role}` })
   return response(res, 200, { ok: true, message: 'Rol actualizado. La cuenta deberá renovar su sesión para recibir los permisos nuevos.' })
 }

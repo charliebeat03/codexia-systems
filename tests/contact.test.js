@@ -89,7 +89,7 @@ test('aplica el rate limit y guarda el lead antes de notificar', async () => {
     SUPABASE_URL: 'https://codexia-test.supabase.co',
     SUPABASE_SECRET_KEY: 'test-secret-only',
     SUPABASE_SERVICE_ROLE_KEY: null,
-    RESEND_API_KEY: null,
+    MAILJET_API_KEY: null, MAILJET_SECRET_KEY: null,
     CONTACT_TO_EMAIL: null,
     CONTACT_FROM_EMAIL: null,
   }, async () => {
@@ -104,7 +104,7 @@ test('aplica el rate limit y guarda el lead antes de notificar', async () => {
     await handler(createRequest({ body: validBody(), headers: { 'x-forwarded-for': '203.0.113.10' } }), res)
     assert.equal(res.statusCode, 201)
     assert.equal(res.payload.ok, true)
-    assert.equal(res.payload.notification, 'not_configured')
+    assert.deepEqual(res.payload.notification, { team: 'not_configured', customer: 'not_configured' })
     assert.equal(calls.length, 2)
     const limitBody = JSON.parse(calls[0].options.body)
     assert.match(limitBody.p_ip_hash, /^[a-f0-9]{64}$/)
@@ -146,12 +146,12 @@ test('rechaza cuerpos excesivamente grandes', async () => {
   })
 })
 
-test('conserva el lead aunque falle la notificación de Resend', async () => {
+test('conserva el lead aunque falle la notificación de Mailjet', async () => {
   await withEnvironment({
     SUPABASE_URL: 'https://codexia-test.supabase.co',
     SUPABASE_SECRET_KEY: 'test-secret-only',
     SUPABASE_SERVICE_ROLE_KEY: null,
-    RESEND_API_KEY: 're_test_only',
+    MAILJET_API_KEY: 'api-test-only', MAILJET_SECRET_KEY: 'secret-test-only',
     CONTACT_TO_EMAIL: 'team@example.com',
     CONTACT_FROM_EMAIL: 'Codexia <noreply@example.com>',
   }, async () => {
@@ -160,17 +160,51 @@ test('conserva el lead aunque falle la notificación de Resend', async () => {
       calls.push(String(url))
       if (String(url).includes('/rpc/consume_contact_rate_limit')) return new Response('true', { status: 200 })
       if (String(url).endsWith('/rest/v1/leads')) return new Response(null, { status: 201 })
-      if (String(url) === 'https://api.resend.com/emails') return new Response('mail provider unavailable', { status: 503 })
+      if (String(url) === 'https://api.mailjet.com/v3.1/send') return new Response('mail provider unavailable', { status: 503 })
       throw new Error(`URL inesperada: ${url}`)
     }
     const res = createResponse()
     await handler(createRequest({ body: validBody() }), res)
     assert.equal(res.statusCode, 201)
     assert.equal(res.payload.ok, true)
-    assert.equal(res.payload.notification, 'failed')
-    assert.equal(calls.length, 3)
+    assert.deepEqual(res.payload.notification, { team: 'failed', customer: 'failed' })
+    assert.equal(calls.length, 4)
     assert.ok(calls[1].endsWith('/rest/v1/leads'))
-    assert.equal(calls[2], 'https://api.resend.com/emails')
+    assert.equal(calls[2], 'https://api.mailjet.com/v3.1/send')
+    assert.equal(calls[3], 'https://api.mailjet.com/v3.1/send')
+  })
+})
+
+test('envía confirmación al cliente y aviso al equipo cuando el correo está configurado', async () => {
+  await withEnvironment({
+    SUPABASE_URL: 'https://codexia-test.supabase.co',
+    SUPABASE_SECRET_KEY: 'test-secret-only',
+    SUPABASE_SERVICE_ROLE_KEY: null,
+    MAILJET_API_KEY: 'api-test-only', MAILJET_SECRET_KEY: 'secret-test-only',
+    CONTACT_TO_EMAIL: 'team@example.com',
+    CONTACT_FROM_EMAIL: 'Codexia <noreply@example.com>',
+  }, async () => {
+    const emails = []
+    globalThis.fetch = async (url, options) => {
+      if (String(url).includes('/rpc/consume_contact_rate_limit')) return new Response('true', { status: 200 })
+      if (String(url).endsWith('/rest/v1/leads')) return new Response(null, { status: 201 })
+      if (String(url) === 'https://api.mailjet.com/v3.1/send') {
+        emails.push({ body: JSON.parse(options.body), headers: options.headers })
+        return new Response(JSON.stringify({ Messages: [{ Status: 'success' }] }), { status: 200 })
+      }
+      throw new Error('URL inesperada: ' + url)
+    }
+    const res = createResponse()
+    await handler(createRequest({ body: validBody() }), res)
+    assert.equal(res.statusCode, 201)
+    assert.deepEqual(res.payload.notification, { team: 'sent', customer: 'sent' })
+    assert.match(res.payload.message, /1 a 3 días hábiles/i)
+    assert.equal(emails.length, 2)
+    assert.deepEqual(emails.map(mail => mail.body.Messages[0].To[0].Email).sort(), ['cliente@example.com', 'team@example.com'])
+    assert.ok(emails.every(mail => mail.headers.Authorization === `Basic ${Buffer.from('api-test-only:secret-test-only').toString('base64')}`))
+    const customerMail = emails.find(mail => mail.body.Messages[0].To[0].Email === 'cliente@example.com').body.Messages[0]
+    assert.match(customerMail.HTMLPart, /Hemos recibido tu solicitud/)
+    assert.match(customerMail.TextPart, /1 y 3 días hábiles|1 a 3 días hábiles/)
   })
 })
 
