@@ -42,29 +42,29 @@ function RouteEffects() {
   useEffect(() => {
     const routeParts = pathname.split('/').filter(Boolean)
     const detailSlug = routeParts[routeParts.length - 1] || ''
-    const prettySlug = detailSlug.replace(/-/g, ' ').replace(/\\b\\w/g, letter => letter.toUpperCase())
+    const prettySlug = detailSlug.replace(/-/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
     const isDetail = pathname.split('/').filter(Boolean).length === 2
-    const meta = pageMeta[pathname] ?? (isDetail ? { title: `${prettySlug} | Codexia Systems`, description: `Conoce el enfoque de Codexia Systems para ${prettySlug.toLowerCase()}.` } : { title: 'Página no encontrada | Codexia Systems', description: 'La página que buscas no está disponible.' })
+    const meta = pageMeta[pathname] ?? (isDetail ? { title: \`\${prettySlug} | Codexia Systems\`, description: \`Conoce el enfoque de Codexia Systems para \${prettySlug.toLowerCase()}.\` } : { title: 'Página no encontrada | Codexia Systems', description: 'La página que buscas no está disponible.' })
     document.title = meta.title
     let description = document.querySelector<HTMLMetaElement>('meta[name="description"]')
     if (!description) { description = document.createElement('meta'); description.name = 'description'; document.head.appendChild(description) }
     description.content = meta.description
     const setProperty = (property: string, content: string) => {
-      let tag = document.querySelector<HTMLMetaElement>(`meta[property="${property}"]`)
+      let tag = document.querySelector<HTMLMetaElement>(\`meta[property="\${property}"]\`)
       if (!tag) { tag = document.createElement('meta'); tag.setAttribute('property', property); document.head.appendChild(tag) }
       tag.content = content
     }
     setProperty('og:title', meta.title)
     setProperty('og:description', meta.description)
-    setProperty('og:url', `${window.location.origin}${pathname}`)
+    setProperty('og:url', \`\${window.location.origin}\${pathname}\`)
     setProperty('og:type', 'website')
-    setProperty('og:image', `${window.location.origin}/assets/codexia-social-preview.webp`)
+    setProperty('og:image', \`\${window.location.origin}/assets/codexia-social-preview.webp\`)
     let robots = document.querySelector<HTMLMetaElement>('meta[name="robots"]')
     if (!robots) { robots = document.createElement('meta'); robots.name = 'robots'; document.head.appendChild(robots) }
     robots.content = pathname === '/acceso' || pathname.startsWith('/panel') ? 'noindex, nofollow' : 'index, follow'
     let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')
     if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical) }
-    canonical.href = `${window.location.origin}${pathname}`
+    canonical.href = \`\${window.location.origin}\${pathname}\`
     window.scrollTo({ top: 0, behavior: 'auto' })
   }, [pathname])
   return null
