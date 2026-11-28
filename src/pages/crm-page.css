@@ -215,9 +215,9 @@
 }
 .crm-role-note, .crm-footer-note { color: #b9cbe4; }
 .crm-role-note svg, .crm-footer-note svg { color: var(--crm-cyan); }
-.crm-heading p, .crm-section-head p, .crm-panel-head h2,
-.crm-section-head h2, .crm-record-main h3, .crm-record-main p,
+.crm-heading p, .crm-section-head p, .crm-record-main p,
 .crm-metrics article span, .crm-metrics article small { color: var(--crm-muted); }
+.crm-panel-head h2, .crm-section-head h2, .crm-record-main h3 { color: #edf4ff; }
 .crm-metrics article strong, .crm-list-row strong, .crm-task-row strong { color: #f0f6ff; }
 .crm-tabs {
   border: 1px solid rgba(133,169,220,.19);
@@ -276,27 +276,12 @@
 .crm-button.danger { background: linear-gradient(110deg,#a9344d,#c34d4d); color: #fff; border-color: rgba(255,150,150,.2); }
 .crm-button.warning { background: rgba(211,151,63,.14); color: #f2c983; border-color: rgba(211,151,63,.28); }
 @media (max-width: 850px) {
-  .crm-shell { width: min(100% - 28px, 720px); padding-top: 30px; }
-  .crm-heading { align-items: flex-start; }
-  .crm-role-note, .crm-footer-note { align-items: flex-start; line-height: 1.55; }
-  .crm-metrics article, .crm-panel, .crm-form, .crm-record-card { border-radius: 14px; }
-  .crm-form { padding: 17px; }
-  .crm-tabs { margin-top: 18px; }
-  .crm-table-wrap { overflow-x: auto; }
-}
-@media (max-width: 600px) {
-  .crm-shell { width: calc(100% - 24px); padding-top: 24px; padding-bottom: 70px; }
-  .crm-heading { gap: 12px; margin-bottom: 18px; }
-  .crm-heading h1 { font-size: clamp(2.35rem, 10vw, 3.3rem); }
-  .crm-tabs { border-radius: 12px; }
-  .crm-tabs button { padding: 10px 11px; font-size: .8rem; }
-  .crm-section-head { align-items: flex-start; }
-  .crm-section-head h2 { font-size: 1.08rem; }
-  .crm-record-card { padding: 15px; }
-  .crm-record-controls { gap: 8px; }
-  .crm-record-controls > * { max-width: 100%; }
-  .crm-rejection-form .crm-form-actions { flex-direction: column; }
-  .crm-rejection-form .crm-form-actions > * { width: 100%; justify-content: center; }
+  /* Keep the established mobile layout; reduce blur cost on phones. */
+  .crm-role-note, .crm-footer-note, .crm-panel, .crm-metrics article,
+  .crm-form, .crm-record-card, .crm-table-wrap, .crm-quote-line {
+    backdrop-filter: blur(8px) saturate(125%);
+    -webkit-backdrop-filter: blur(8px) saturate(125%);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .crm-shell *, .crm-shell *::before, .crm-shell *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
