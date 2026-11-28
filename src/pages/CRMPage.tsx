@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Activity, ArrowLeft, BadgeDollarSign, BriefcaseBusiness, Check, CircleAlert, ClipboardList, ContactRound, FileText, FolderPlus, Plus, Printer, RefreshCw, Search, ShieldCheck, Trash2, Users } from 'lucide-react'
+import { Activity, ArrowLeft, BadgeDollarSign, BriefcaseBusiness, Check, CircleAlert, ClipboardList, ContactRound, FileText, FolderPlus, Mail, Plus, Printer, RefreshCw, Search, ShieldCheck, Trash2, Users, X } from 'lucide-react'
 import { Link, Navigate } from 'react-router-dom'
 import { SiteFooter, SiteHeader } from '../components/SiteShell'
 import { useAuth } from '../auth/AuthProvider'
@@ -13,7 +13,7 @@ type PortalProfile = { id:string; email:string; display_name:string; role:string
 type Task = { id:string; contact_id:string|null; opportunity_id:string|null; title:string; priority:string; status:string; due_at:string|null; assigned_to:string|null }
 type ActivityRow = { id:string; contact_id:string|null; opportunity_id:string|null; activity_type:string; subject:string; body:string|null; occurred_at:string }
 type Service = { id:string; code:string; name:string; min_price:number|null; max_price:number|null; currency:string; pricing_note:string|null; active:boolean }
-type Quote = { id:string; quote_number:number; contact_id:string; opportunity_id:string|null; status:string; currency:string; subtotal:number; discount:number; total:number; valid_until:string|null; notes:string|null; created_at:string }
+type Quote = { id:string; quote_number:number; contact_id:string; opportunity_id:string|null; status:string; currency:string; subtotal:number; discount:number; total:number; valid_until:string|null; notes:string|null; rejection_reason?:string|null; rejection_email_sent_at?:string|null; created_at:string }
 type QuoteItem = { id:string; quote_id:string; service_id:string|null; description:string; quantity:number; unit_price:number; line_total:number; sort_order:number }
 type QuoteDraftItem = { description:string; quantity:string; unit_price:string }
 
@@ -34,11 +34,24 @@ const money = (value:number|null|undefined,currency='USD') => value==null?'Por d
 const dateText = (value:string|null|undefined) => value ? new Intl.DateTimeFormat('es',{dateStyle:'medium'}).format(new Date(value)) : 'Sin fecha'
 
 export default function CRMPage() {
-  const {user,role,loading,configured} = useAuth()
+  const {user,session,role,loading,configured} = useAuth()
   const staff = isStaffRole(role)
   const admin = isAdminRole(role)
   const owner = role === 'owner'
   const [tab,setTab] = useState<Tab>('overview')
+  useEffect(() => {
+    const initialState = { ...(window.history.state || {}), codexiaCrm: true, crmTab: 'overview' }
+    window.history.pushState(initialState, '', window.location.href)
+    const handleBack = (event: PopStateEvent) => {
+      if (event.state?.codexiaCrm) setTab((event.state.crmTab as Tab) || 'overview')
+    }
+    window.addEventListener('popstate', handleBack)
+    return () => window.removeEventListener('popstate', handleBack)
+  }, [])
+  function navigateTab(next: Tab) {
+    setTab(next)
+    window.history.pushState({ ...(window.history.state || {}), codexiaCrm: true, crmTab: next }, '', window.location.href)
+  }
   const [contacts,setContacts] = useState<Contact[]>([])
   const [portalProfiles,setPortalProfiles] = useState<PortalProfile[]>([])
   const [leads,setLeads] = useState<Lead[]>([])
@@ -49,6 +62,8 @@ export default function CRMPage() {
   const [quotes,setQuotes] = useState<Quote[]>([])
   const [quoteItems,setQuoteItems] = useState<QuoteItem[]>([])
   const [printingQuoteId,setPrintingQuoteId] = useState<string|null>(null)
+  const [rejectingQuoteId,setRejectingQuoteId] = useState<string|null>(null)
+  const [rejectionReason,setRejectionReason] = useState('')
   const [search,setSearch] = useState('')
   const [busy,setBusy] = useState(false)
   const [error,setError] = useState('')
@@ -261,6 +276,47 @@ export default function CRMPage() {
     setBusy(false)
     await finish(status==='accepted'?(promoteOpportunity?'Presupuesto aceptado y oportunidad marcada como ganada.':'Presupuesto aceptado. La oportunidad no se modificó.'):'Estado del presupuesto actualizado.')
   }
+  async function rejectQuote(quote:Quote) {
+    if(!session?.access_token||!admin||quote.status==='accepted'||quote.status==='rejected')return
+    const reason=rejectionReason.trim()
+    if(reason.length<8){setError('Explica brevemente el motivo del rechazo (al menos 8 caracteres).');return}
+    if(!window.confirm('¿Rechazar la propuesta #'+quote.quote_number+' y notificar al cliente por correo?'))return
+    setBusy(true);setError('');setNotice('')
+    try {
+      const response=await fetch('/api/crm/quote-decision',{
+        method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},
+        body:JSON.stringify({action:'reject',quoteId:quote.id,reason}),
+      })
+      const result=await response.json().catch(()=>({}))
+      if(!response.ok||!result.ok)throw new Error(result.error||'No se pudo rechazar la propuesta.')
+      setRejectingQuoteId(null);setRejectionReason('')
+      await load()
+      setNotice(result.emailSent
+        ? 'Presupuesto #'+quote.quote_number+' rechazado. El cliente fue notificado por correo.'
+        : 'La propuesta quedó rechazada, pero no se pudo enviar el correo. Puedes reintentar el aviso desde esta tarjeta.')
+    } catch(cause) {
+      setError(cause instanceof Error?cause.message:'No se pudo completar el rechazo.')
+    } finally {setBusy(false)}
+  }
+  async function resendQuoteRejection(quote:Quote) {
+    if(!session?.access_token||!admin||quote.status!=='rejected')return
+    setBusy(true);setError('');setNotice('')
+    try {
+      const response=await fetch('/api/crm/quote-decision',{
+        method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},
+        body:JSON.stringify({action:'notify',quoteId:quote.id}),
+      })
+      const result=await response.json().catch(()=>({}))
+      if(!response.ok||!result.ok)throw new Error(result.error||'No se pudo reenviar la notificación.')
+      await load()
+      setNotice('Notificación de rechazo enviada al cliente.')
+    } catch(cause) {
+      setError(cause instanceof Error?cause.message:'No se pudo reenviar la notificación.')
+    } finally {setBusy(false)}
+  }
+
   async function updateRow(table:string,id:string,values:Record<string,unknown>,message:string) {
     if(!supabase||!admin)return
     setBusy(true); const {error:e1}=await (supabase as any).from(table).update(values).eq('id',id)
@@ -275,14 +331,14 @@ export default function CRMPage() {
     <div className="crm-topline"><Link to="/panel" className="crm-back"><ArrowLeft size={15}/> Volver al espacio privado</Link><span><ShieldCheck size={15}/> Área interna de Codexia</span></div>
     <div className="crm-heading"><div><div className="section-kicker">CODEXIA SYSTEMS / GESTIÓN COMERCIAL</div><h1>CRM <em>central.</em></h1><p>Contactos, oportunidades, seguimiento, presupuestos y catálogo de servicios en un solo lugar.</p></div><button className="crm-button secondary" onClick={()=>void load()} disabled={busy}><RefreshCw size={16}/> Actualizar</button></div>
     <div className="crm-role-note"><ShieldCheck size={16}/><span>Sesión: <strong>{role==='owner'?'Propietario':role==='admin'?'Administrador':'Equipo'}</strong>. {owner?'Control total del catálogo y la configuración comercial.':admin?'Gestión comercial y operativa.':'Acceso de consulta.'}</span></div>
-    <nav className="crm-tabs" aria-label="Secciones del CRM">{tabs.map(({id,label,icon:Icon})=><button type="button" key={id} aria-pressed={tab===id} className={tab===id?'active':''} onClick={()=>{setTab(id);setShowForm(false);setError('');setNotice('')}}><Icon size={16}/>{label}</button>)}</nav>
+    <nav className="crm-tabs" aria-label="Secciones del CRM">{tabs.map(({id,label,icon:Icon})=><button type="button" key={id} aria-pressed={tab===id} className={tab===id?'active':''} onClick={()=>{navigateTab(id);setShowForm(false);setError('');setNotice('')}}><Icon size={16}/>{label}</button>)}</nav>
     {error&&<div className="crm-alert error" role="alert" aria-live="assertive"><CircleAlert size={17}/>{error}</div>}
     {notice&&<div className="crm-alert success" role="status" aria-live="polite"><Check size={17}/>{notice}</div>}
     {tab==='overview'&&<section className="crm-content">
       <div className="crm-metrics"><article><span>Contactos</span><strong>{contacts.length}</strong><small>Personas y organizaciones</small></article><article><span>Oportunidades abiertas</span><strong>{opportunities.filter(o=>!['won','lost'].includes(o.stage)).length}</strong><small>Pipeline: {pipeline}</small></article><article><span>Tareas pendientes</span><strong>{openTasks.length}</strong><small>Por completar</small></article><article><span>Ventas ganadas</span><strong>{won.length}</strong><small>Valor: {formatOpportunityTotal(won)}</small></article></div>
-      <div className="crm-overview-grid"><section className="crm-panel"><div className="crm-panel-head"><h2>Oportunidades recientes</h2><button onClick={()=>setTab('opportunities')}>Ver todas</button></div>{opportunities.slice(0,5).map(o=><div className="crm-list-row" key={o.id}><div><strong>{o.title}</strong><small>{contactName(o.contact_id)}</small></div><span className={'crm-stage '+o.stage}>{stages.find(s=>s.value===o.stage)?.label||o.stage}</span><b>{money(o.estimated_value,o.currency)}</b></div>)}{!opportunities.length&&<p className="crm-empty">Todavía no hay oportunidades registradas.</p>}</section>
-      <section className="crm-panel"><div className="crm-panel-head"><h2>Próximas tareas</h2><button onClick={()=>setTab('tasks')}>Ver todas</button></div>{openTasks.slice(0,6).map(t=><div className="crm-task-row" key={t.id}><span className={'crm-priority '+t.priority}/><div><strong>{t.title}</strong><small>{contactName(t.contact_id)} · {dateText(t.due_at)}</small></div><span className="crm-muted">{taskStates.find(s=>s.value===t.status)?.label}</span></div>)}{!openTasks.length&&<p className="crm-empty">No hay tareas pendientes. Buen momento para planificar.</p>}</section></div>
-      <section className="crm-panel"><div className="crm-panel-head"><h2>Acciones rápidas</h2></div><div className="crm-quick-actions"><button onClick={()=>{setTab('contacts');setShowForm(true)}}><Users/>Nuevo contacto</button><button onClick={()=>{setTab('opportunities');setShowForm(true)}}><BadgeDollarSign/>Nueva oportunidad</button><button onClick={()=>{setTab('tasks');setShowForm(true)}}><ClipboardList/>Crear tarea</button><button onClick={()=>{setTab('quotes');setShowForm(true)}}><FileText/>Nuevo presupuesto</button></div></section>
+      <div className="crm-overview-grid"><section className="crm-panel"><div className="crm-panel-head"><h2>Oportunidades recientes</h2><button onClick={()=>navigateTab('opportunities')}>Ver todas</button></div>{opportunities.slice(0,5).map(o=><div className="crm-list-row" key={o.id}><div><strong>{o.title}</strong><small>{contactName(o.contact_id)}</small></div><span className={'crm-stage '+o.stage}>{stages.find(s=>s.value===o.stage)?.label||o.stage}</span><b>{money(o.estimated_value,o.currency)}</b></div>)}{!opportunities.length&&<p className="crm-empty">Todavía no hay oportunidades registradas.</p>}</section>
+      <section className="crm-panel"><div className="crm-panel-head"><h2>Próximas tareas</h2><button onClick={()=>navigateTab('tasks')}>Ver todas</button></div>{openTasks.slice(0,6).map(t=><div className="crm-task-row" key={t.id}><span className={'crm-priority '+t.priority}/><div><strong>{t.title}</strong><small>{contactName(t.contact_id)} · {dateText(t.due_at)}</small></div><span className="crm-muted">{taskStates.find(s=>s.value===t.status)?.label}</span></div>)}{!openTasks.length&&<p className="crm-empty">No hay tareas pendientes. Buen momento para planificar.</p>}</section></div>
+      <section className="crm-panel"><div className="crm-panel-head"><h2>Acciones rápidas</h2></div><div className="crm-quick-actions"><button onClick={()=>{navigateTab('contacts');setShowForm(true)}}><Users/>Nuevo contacto</button><button onClick={()=>{navigateTab('opportunities');setShowForm(true)}}><BadgeDollarSign/>Nueva oportunidad</button><button onClick={()=>{navigateTab('tasks');setShowForm(true)}}><ClipboardList/>Crear tarea</button><button onClick={()=>{navigateTab('quotes');setShowForm(true)}}><FileText/>Nuevo presupuesto</button></div></section>
     </section>}
     {tab==='leads'&&<section className="crm-content"><div className="crm-section-head"><div><h2>Consultas recibidas</h2><p>Solicitudes del formulario público. Convierte una consulta en contacto para continuar su seguimiento.</p></div><span className="crm-muted">{leads.length} registradas</span></div><div className="crm-card-list">{leads.map(lead=><article className="crm-record-card" key={lead.id}><div className="crm-record-main"><span className="crm-record-kicker">{lead.service} · {dateText(lead.created_at)}</span><h3>{lead.name}</h3><p>{lead.email}{lead.organization?' · '+lead.organization:''}{lead.budget?' · '+lead.budget:''}</p><p>{lead.details}</p></div><div className="crm-record-controls">{lead.contact_id?<span className="crm-stage won">Vinculada: {contactName(lead.contact_id)}</span>:admin?<button className="crm-button primary" disabled={busy} onClick={()=>void convertLeadToContact(lead)}>Convertir en contacto</button>:<span className="crm-muted">Sin convertir</span>}</div></article>)}{!leads.length&&<p className="crm-empty">No hay consultas recibidas todavía.</p>}</div></section>}
       {tab==='contacts'&&<section className="crm-content"><div className="crm-section-head"><div><h2>Contactos</h2><p>Empresas, pequeños negocios y personas individuales tienen el mismo acceso al proceso comercial.</p></div><div className="crm-head-actions"><label className="crm-search"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar contacto…"/></label>{admin&&<button className="crm-button primary" onClick={()=>setShowForm(v=>!v)}><Plus size={16}/> Nuevo contacto</button>}</div></div>
@@ -303,7 +359,7 @@ export default function CRMPage() {
     </section>}
     {tab==='quotes'&&<section className="crm-content"><div className="crm-section-head"><div><h2>Presupuestos</h2><p>Propuestas comerciales con partidas, descuentos y vigencia.</p></div>{admin&&<button className="crm-button primary" onClick={()=>setShowForm(v=>!v)}><Plus size={16}/> Nuevo presupuesto</button>}</div>
       {showForm&&admin&&<form className="crm-form" onSubmit={createQuote}><h3>Crear presupuesto</h3><div className="crm-form-grid"><label>Contacto *<select required value={quoteForm.contact_id} onChange={e=>setQuoteForm(v=>({...v,contact_id:e.target.value,opportunity_id:''}))}><option value="">Seleccionar</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.display_name}</option>)}</select></label><label>Oportunidad relacionada (opcional)<select value={quoteForm.opportunity_id} onChange={e=>setQuoteForm(v=>({...v,opportunity_id:e.target.value}))}><option value="">Sin asociar</option>{opportunities.filter(o=>o.contact_id===quoteForm.contact_id).map(o=><option key={o.id} value={o.id}>{o.title}</option>)}</select></label></div><div className="crm-quote-editor"><div className="crm-quote-editor-head"><h4>Partidas del presupuesto</h4><button type="button" className="crm-button secondary small" onClick={()=>setQuoteForm(v=>({...v,items:[...v.items,{description:'',quantity:'1',unit_price:''}]}))}><Plus size={14}/> Añadir partida</button></div>{quoteForm.items.map((item,index)=><div className="crm-quote-line" key={index}><label>Concepto / servicio<input required maxLength={240} value={item.description} onChange={e=>setQuoteForm(v=>({...v,items:v.items.map((line,i)=>i===index?{...line,description:e.target.value}:line)}))}/></label><label>Cantidad<input required type="number" min="0.01" step="0.01" value={item.quantity} onChange={e=>setQuoteForm(v=>({...v,items:v.items.map((line,i)=>i===index?{...line,quantity:e.target.value}:line)}))}/></label><label>Precio unitario (USD)<input required type="number" min="0" step="0.01" value={item.unit_price} onChange={e=>setQuoteForm(v=>({...v,items:v.items.map((line,i)=>i===index?{...line,unit_price:e.target.value}:line)}))}/></label><strong>{money((Number(item.quantity)||0)*(Number(item.unit_price)||0),'USD')}</strong>{quoteForm.items.length>1&&<button type="button" className="crm-icon-button" aria-label={'Eliminar partida '+(index+1)} onClick={()=>setQuoteForm(v=>({...v,items:v.items.filter((_,i)=>i!==index)}))}><Trash2 size={16}/></button>}</div>)}</div><div className="crm-form-grid"><label>Descuento global (USD)<input type="number" min="0" step="0.01" value={quoteForm.discount} onChange={e=>setQuoteForm(v=>({...v,discount:e.target.value}))}/></label><label>Válido hasta<input type="date" value={quoteForm.valid_until} onChange={e=>setQuoteForm(v=>({...v,valid_until:e.target.value}))}/></label><label className="wide">Notas / condiciones<textarea rows={3} value={quoteForm.notes} onChange={e=>setQuoteForm(v=>({...v,notes:e.target.value}))}/></label></div><div className="crm-quote-totals"><span>Subtotal: <strong>{money(quoteForm.items.reduce((sum,item)=>sum+(Number(item.quantity)||0)*(Number(item.unit_price)||0),0),'USD')}</strong></span><span>Descuento: <strong>{money(Number(quoteForm.discount)||0,'USD')}</strong></span><span>Total: <strong>{money(Math.max(0,quoteForm.items.reduce((sum,item)=>sum+(Number(item.quantity)||0)*(Number(item.unit_price)||0),0)-(Number(quoteForm.discount)||0)),'USD')}</strong></span></div><div className="crm-form-actions"><button className="crm-button primary" disabled={busy||!contacts.length}>Guardar borrador</button><button type="button" className="crm-button secondary" onClick={()=>setShowForm(false)}>Cancelar</button></div></form>}
-      <div className="crm-card-list">{quotes.map(q=><article className="crm-record-card" key={q.id}><div className="crm-record-main"><span className="crm-record-kicker">Presupuesto #{q.quote_number}</span><h3>{contactName(q.contact_id)}</h3><p>{q.opportunity_id?'Oportunidad: '+(opportunities.find(o=>o.id===q.opportunity_id)?.title||'Asociada')+' · ':''}Creado: {dateText(q.created_at)} · {q.valid_until?'Válido hasta '+dateText(q.valid_until):'Sin vencimiento definido'}</p><small>{quoteItems.filter(item=>item.quote_id===q.id).length} partida(s)</small></div><div className="crm-record-controls"><strong>{money(q.total,q.currency)}</strong>{admin?<select value={q.status} disabled={busy} onChange={e=>void updateQuoteStatus(q,e.target.value)}><option value="draft">Borrador</option><option value="sent">Enviado</option><option value="accepted">Aceptado</option><option value="rejected">Rechazado</option><option value="expired">Vencido</option><option value="cancelled">Cancelado</option></select>:<span>{q.status}</span>}<button type="button" className="crm-button secondary small" onClick={()=>setPrintingQuoteId(q.id)}><Printer size={14}/> PDF / Imprimir</button></div></article>)}{!quotes.length&&<p className="crm-empty">No hay presupuestos creados.</p>}</div>
+      <div className="crm-card-list">{quotes.map(q=><article className="crm-record-card" key={q.id}><div className="crm-record-main"><span className="crm-record-kicker">Presupuesto #{q.quote_number}</span><h3>{contactName(q.contact_id)}</h3><p>{q.opportunity_id?'Oportunidad: '+(opportunities.find(o=>o.id===q.opportunity_id)?.title||'Asociada')+' · ':''}Creado: {dateText(q.created_at)} · {q.valid_until?'Válido hasta '+dateText(q.valid_until):'Sin vencimiento definido'}</p><small>{quoteItems.filter(item=>item.quote_id===q.id).length} partida(s)</small></div><div className="crm-record-controls"><strong>{money(q.total,q.currency)}</strong>{admin?<select value={q.status} disabled={busy||q.status==='rejected'} onChange={e=>void updateQuoteStatus(q,e.target.value)}><option value="draft">Borrador</option><option value="sent">Enviado</option><option value="accepted">Aceptado</option><option value="expired">Vencido</option><option value="cancelled">Cancelado</option><option value="rejected" disabled>Rechazado</option></select>:<span className={'crm-stage '+(q.status==='rejected'?'lost':q.status==='accepted'?'won':'')}>{q.status==='rejected'?'Rechazado':q.status==='accepted'?'Aceptado':q.status==='sent'?'Enviado':q.status==='draft'?'Borrador':q.status}</span>}{admin&&(q.status==='draft'||q.status==='sent')&&<button type="button" className="crm-button danger small" disabled={busy} onClick={()=>{setRejectingQuoteId(rejectingQuoteId===q.id?null:q.id);setRejectionReason('')}}><X size={14}/> Rechazar propuesta</button>}<button type="button" className="crm-button secondary small" onClick={()=>setPrintingQuoteId(q.id)}><Printer size={14}/> PDF / Imprimir</button></div>{q.status==='rejected'&&<div className="crm-rejection-summary"><strong>Motivo comunicado al cliente</strong><p>{q.rejection_reason||'No se registró un motivo.'}</p>{!q.rejection_email_sent_at&&admin&&<button type="button" className="crm-button warning small" disabled={busy} onClick={()=>void resendQuoteRejection(q)}><Mail size={14}/> Reintentar notificación</button>}<small>{q.rejection_email_sent_at?'Aviso aceptado por Mailjet: '+dateText(q.rejection_email_sent_at):'El aviso por correo está pendiente.'}</small></div>}{rejectingQuoteId===q.id&&<form className="crm-rejection-form" onSubmit={e=>{e.preventDefault();void rejectQuote(q)}}><label>Motivo del rechazo<textarea required minLength={8} maxLength={1200} rows={3} value={rejectionReason} onChange={e=>setRejectionReason(e.target.value)} placeholder="Explica al cliente por qué no podemos aceptar esta propuesta…"/></label><div className="crm-form-actions"><button className="crm-button danger" disabled={busy||rejectionReason.trim().length<8}><Mail size={15}/> {busy?'Procesando…':'Rechazar y notificar'}</button><button type="button" className="crm-button secondary" onClick={()=>{setRejectingQuoteId(null);setRejectionReason('')}}>Cancelar</button></div></form>}</article>)}{!quotes.length&&<p className="crm-empty">No hay presupuestos creados.</p>}</div>
       {printingQuoteId&&(()=>{const q=quotes.find(item=>item.id===printingQuoteId);if(!q)return null;const lines=quoteItems.filter(item=>item.quote_id===q.id);const contact=contacts.find(item=>item.id===q.contact_id);const opportunity=opportunities.find(item=>item.id===q.opportunity_id);return <section className="crm-print-sheet"><header><div><strong>CODEXIA SYSTEMS</strong><p>Transformamos Procesos en Soluciones</p></div><div><h1>Presupuesto #{q.quote_number}</h1><p>Fecha: {dateText(q.created_at)}</p></div></header><h2>{contact?.display_name||'Cliente'}</h2>{contact?.email&&<p>{contact.email}</p>}{contact?.phone&&<p>{contact.phone}</p>}{opportunity&&<p>Oportunidad: {opportunity.title}</p>}<table><thead><tr><th>Concepto</th><th>Cantidad</th><th>Precio unitario</th><th>Importe</th></tr></thead><tbody>{lines.map(line=><tr key={line.id}><td>{line.description}</td><td>{line.quantity}</td><td>{money(line.unit_price,q.currency)}</td><td>{money(line.line_total,q.currency)}</td></tr>)}</tbody></table><div className="crm-print-totals"><p>Subtotal: {money(q.subtotal,q.currency)}</p><p>Descuento: {money(q.discount,q.currency)}</p><h2>Total: {money(q.total,q.currency)}</h2></div>{q.valid_until&&<p>Válido hasta: {dateText(q.valid_until)}</p>}{q.notes&&<div><h3>Notas y condiciones</h3><p>{q.notes}</p></div>}<footer>Codexia Systems · Todos los derechos reservados.</footer></section>})()}
     </section>}
     {tab==='services'&&<section className="crm-content"><div className="crm-section-head"><div><h2>Catálogo de servicios y precios</h2><p>Precios de referencia editables por el propietario. Cada propuesta se ajusta al alcance real.</p></div></div>

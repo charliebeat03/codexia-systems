@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Bell, Check, ChevronRight, Mail, RefreshCw, Send, X } from 'lucide-react'
+import { Bell, Check, ChevronRight, Mail, RefreshCw, Send, X, Ban } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { isStaffRole, supabase } from '../lib/supabase'
 import './crm-inbox.css'
@@ -13,6 +13,9 @@ type Lead = {
   details: string
   features: string | null
   created_at: string
+  status?: string
+  rejection_reason?: string | null
+  rejection_email_sent_at?: string | null
 }
 type Notification = { id: string; lead_id: string; title: string; body: string; read_at: string | null; created_at: string }
 
@@ -28,16 +31,24 @@ export default function CRMInbox() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [rejectionSchemaReady, setRejectionSchemaReady] = useState(true)
+  const [rejecting, setRejecting] = useState(false)
+  const [rejectionReason, setRejectionReason] = useState('')
 
   const unread = useMemo(() => notifications.filter(item => !item.read_at).length, [notifications])
 
   const load = useCallback(async () => {
     if (!supabase || !user || !staff) return
     const db = supabase as any
-    const [notificationResult, leadResult] = await Promise.all([
+    const [notificationResult, initialLeadResult] = await Promise.all([
       db.from('crm_notifications').select('id,lead_id,title,body,read_at,created_at').order('created_at', { ascending: false }).limit(40),
-      db.from('leads').select('id,name,email,organization,service,details,features,created_at').order('created_at', { ascending: false }).limit(80),
+      db.from('leads').select('id,name,email,organization,service,details,features,created_at,status,rejection_reason,rejection_email_sent_at').order('created_at', { ascending: false }).limit(80),
     ])
+    let leadResult = initialLeadResult
+    if (leadResult.error && /rejection_reason|rejection_email_sent_at|column.*does not exist|schema cache/i.test(String(leadResult.error.message || ''))) {
+      setRejectionSchemaReady(false)
+      leadResult = await db.from('leads').select('id,name,email,organization,service,details,features,created_at,status').order('created_at', { ascending: false }).limit(80)
+    } else if (!leadResult.error) setRejectionSchemaReady(true)
     if (notificationResult.error || leadResult.error) {
       setError('No se pudo cargar la bandeja del CRM. Comprueba los permisos y la conexión.')
       return
@@ -70,6 +81,51 @@ export default function CRMInbox() {
       const { error: updateError } = await (supabase as any).from('crm_notifications').update({ read_at: now }).eq('id', notification.id)
       if (!updateError) setNotifications(rows => rows.map(row => row.id === notification.id ? { ...row, read_at: now } : row))
     }
+  }
+
+  async function rejectLead(event: FormEvent) {
+    event.preventDefault()
+    if (!selected || !session?.access_token || !['owner','admin'].includes(role)) return
+    const reason = rejectionReason.trim()
+    if (reason.length < 8) { setError('Explica el motivo del rechazo con al menos 8 caracteres.'); return }
+    if (!window.confirm('¿Rechazar esta solicitud y enviar el motivo al cliente por correo?')) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const response = await fetch('/api/crm/lead-decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ leadId: selected.id, reason }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.ok) throw new Error(result.error || 'No se pudo rechazar la solicitud.')
+      setSelected({ ...selected, status: 'rejected', rejection_reason: reason, rejection_email_sent_at: result.emailSent ? new Date().toISOString() : null })
+      setRejecting(false); setRejectionReason('')
+      await load()
+      setNotice(result.emailSent
+        ? 'Solicitud rechazada. Mailjet aceptó el correo de notificación para el cliente.'
+        : 'La solicitud quedó rechazada, pero no se pudo enviar el correo. Comprueba el correo del cliente y reintenta desde esta bandeja.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo rechazar la solicitud.')
+    } finally { setBusy(false) }
+  }
+
+  async function retryLeadNotice() {
+    if (!selected || !session?.access_token || !['owner','admin'].includes(role)) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const response = await fetch('/api/crm/lead-decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ action: 'notify', leadId: selected.id }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.ok || !result.emailSent) throw new Error(result.error || result.emailError || 'Mailjet no pudo aceptar el correo.')
+      setSelected({ ...selected, rejection_email_sent_at: new Date().toISOString() })
+      await load()
+      setNotice('Notificación de rechazo reenviada. Mailjet aceptó el correo.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo reenviar la notificación.')
+    } finally { setBusy(false) }
   }
 
   async function sendReply(event: FormEvent) {
@@ -105,6 +161,10 @@ export default function CRMInbox() {
         <button type="button" className="crm-inbox-back" onClick={() => { setSelected(null); setError(''); setNotice('') }}>← Volver a consultas</button>
         <div className="crm-inbox-recipient"><strong>{selected.name}</strong><small>{selected.email}</small><small>{selected.service} · {new Date(selected.created_at).toLocaleString('es')}</small></div>
         <div className="crm-inbox-original"><strong>Consulta original</strong><p>{selected.details}</p>{selected.features && <p><b>Funciones:</b> {selected.features}</p>}</div>
+        {!rejectionSchemaReady && <p className="crm-inbox-schema-note">La bandeja funciona en modo de compatibilidad. El rechazo de solicitudes se activará al aplicar la actualización pendiente de Supabase.</p>}
+        {selected.status === 'rejected' && <div className="crm-inbox-rejected"><strong><Ban size={15}/> Solicitud rechazada</strong><p>{selected.rejection_reason || 'Sin motivo registrado.'}</p><small>{selected.rejection_email_sent_at ? 'Notificación aceptada por Mailjet.' : 'La notificación por correo está pendiente.'}</small>{rejectionSchemaReady && !selected.rejection_email_sent_at && ['owner','admin'].includes(role) && <button type="button" className="crm-inbox-retry" disabled={busy} onClick={() => void retryLeadNotice()}><RefreshCw size={14}/> Reintentar notificación</button>}</div>}
+        {rejectionSchemaReady && ['owner','admin'].includes(role) && selected.status !== 'rejected' && !rejecting && <button type="button" className="crm-inbox-reject-trigger" onClick={() => { setRejecting(true); setError(''); setNotice('') }}><Ban size={15}/> Rechazar esta solicitud</button>}
+        {rejecting && <form className="crm-inbox-reject-form" onSubmit={rejectLead}><label>Motivo que recibirá el cliente<textarea required minLength={8} maxLength={1200} rows={4} value={rejectionReason} onChange={event => setRejectionReason(event.target.value)} placeholder="Explica de forma clara y respetuosa por qué no podemos aceptar esta solicitud…"/></label><div><button type="submit" disabled={busy || rejectionReason.trim().length < 8}><Mail size={15}/>{busy ? 'Procesando…' : 'Rechazar y enviar correo'}</button><button type="button" onClick={() => { setRejecting(false); setRejectionReason('') }}>Cancelar</button></div></form>}
         <form onSubmit={sendReply}>
           <label>Asunto<input required maxLength={180} value={subject} onChange={event => setSubject(event.target.value)}/></label>
           <label>Tu respuesta<textarea required minLength={2} maxLength={8000} rows={7} value={message} onChange={event => setMessage(event.target.value)} placeholder="Escribe una respuesta clara y profesional…"/></label>

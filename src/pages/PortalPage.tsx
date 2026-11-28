@@ -6,12 +6,12 @@ import { useAuth } from '../auth/AuthProvider'
 import { isAdminRole, isStaffRole, supabase } from '../lib/supabase'
 import type { TableRow } from '../lib/database.types'
 
-type Lead = Omit<TableRow<'leads'>, 'status'> & { status: 'new'|'reviewing'|'proposal'|'won'|'closed' }
+type Lead = Omit<TableRow<'leads'>, 'status'> & { status: 'new'|'reviewing'|'proposal'|'won'|'closed'|'rejected' }
 type Project = Omit<TableRow<'projects'>, 'status'> & { status: 'planning'|'active'|'paused'|'completed'|'archived' }
 type Profile = Pick<TableRow<'profiles'>, 'id'|'email'|'display_name'|'role'>
 type Update = Omit<TableRow<'project_updates'>, 'visibility'> & { visibility: 'internal'|'client' }
 type DocumentRow = Omit<TableRow<'project_documents'>, 'visibility'> & { visibility: 'internal'|'client' }
-const leadStatuses = [{value:'new',label:'Nueva'},{value:'reviewing',label:'En revisión'},{value:'proposal',label:'Propuesta'},{value:'won',label:'Convertida'},{value:'closed',label:'Cerrada'}]
+const leadStatuses = [{value:'new',label:'Nueva'},{value:'reviewing',label:'En revisión'},{value:'proposal',label:'Propuesta'},{value:'won',label:'Convertida'},{value:'closed',label:'Cerrada'},{value:'rejected',label:'Rechazada'}]
 const projectStatuses = [{value:'planning',label:'Planificación'},{value:'active',label:'Activo'},{value:'paused',label:'Pausado'},{value:'completed',label:'Completado'},{value:'archived',label:'Archivado'}]
 const dateLabel = (value:string) => new Intl.DateTimeFormat('es',{dateStyle:'medium'}).format(new Date(value))
 
