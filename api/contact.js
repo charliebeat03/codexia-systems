@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const emailPattern = /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i
 const allowedServices = new Set([
   'Desarrollo de software',
   'Inteligencia artificial',
@@ -45,10 +45,7 @@ async function consumeRateLimit(ip) {
   const ipHash = createHmac('sha256', config.key).update(ip || 'unknown').digest('hex')
   const response = await fetch(`${config.url}/rest/v1/rpc/consume_contact_rate_limit`, {
     method: 'POST',
-    headers: {
-      apikey: config.key,
-      'Content-Type': 'application/json',
-    },
+    headers: { apikey: config.key, 'Content-Type': 'application/json' },
     body: JSON.stringify({ p_ip_hash: ipHash, p_now: new Date().toISOString(), p_cooldown_seconds: 60 }),
   })
   if (!response.ok) throw new Error(`RATE_LIMIT_CHECK_FAILED_${response.status}`)
@@ -58,21 +55,12 @@ async function consumeRateLimit(ip) {
 async function saveLead(lead) {
   const config = getSupabaseConfig()
   if (!config) throw new Error('CRM_NOT_CONFIGURED')
-
   const response = await fetch(`${config.url}/rest/v1/leads`, {
     method: 'POST',
-    headers: {
-      apikey: config.key,
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    },
+    headers: { apikey: config.key, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
     body: JSON.stringify(lead),
   })
-
-  if (!response.ok) {
-    // Keep provider details server-side. Never send database diagnostics to a visitor.
-    throw new Error(`CRM_WRITE_FAILED_${response.status}`)
-  }
+  if (!response.ok) throw new Error(`CRM_WRITE_FAILED_${response.status}`)
 }
 
 async function sendEmail({ to, from, subject, html, text, replyTo }) {
@@ -91,11 +79,7 @@ async function sendEmail({ to, from, subject, html, text, replyTo }) {
     const credentials = Buffer.from(`${process.env.MAILJET_API_KEY}:${process.env.MAILJET_SECRET_KEY}`).toString('base64')
     const response = await fetch('https://api.mailjet.com/v3.1/send', {
       method: 'POST',
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        'Content-Type': 'application/json',
-        accept: 'application/json',
-      },
+      headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({ Messages: [message] }),
     })
     if (!response.ok) {
@@ -130,7 +114,7 @@ async function sendNotification({ name, email, organization, service, budget, ti
     ['Servicio', service], ['Presupuesto', budget || 'Por definir'], ['Plazo', timing || 'No indicado'],
     ['Descripción', details], ['Funciones o necesidades', features || 'No indicadas'],
   ]
-  const fieldHtml = fields.map(([label, value]) => `<p><b>${escapeHtml(label)}:</b><br>${escapeHtml(value).replace(/\n/g, '<br>')}</p>`).join('')
+  const fieldHtml = fields.map(([label, value]) => `<p><b>${escapeHtml(value ? label : label)}:</b><br>${escapeHtml(value).replace(/\n/g, '<br>')}</p>`).join('')
   const teamHtml = `<h2>Nueva solicitud desde Codexia Systems</h2>${fieldHtml}`
   const customerHtml = `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#17221f;max-width:640px;margin:auto"><h2 style="color:#087b68">Hemos recibido tu solicitud</h2><p>Hola ${escapeHtml(name)},</p><p>Gracias por contactar con <b>Codexia Systems</b>. Tu solicitud quedó registrada correctamente y nuestro equipo revisará la información.</p><p><b>Plazo estimado de respuesta:</b> normalmente entre 1 y 3 días hábiles. Si necesitamos aclarar algún detalle, te escribiremos a esta misma dirección.</p><p>Esta confirmación solo acredita la recepción de tu consulta; todavía no constituye una cotización definitiva ni la aceptación de un proyecto.</p><p>Conserva este correo como referencia. Puedes responder directamente a este mensaje si deseas añadir información.</p><p>Saludos,<br><b>Equipo de Codexia Systems</b><br>Transformamos Procesos en Soluciones.</p></div>`
   const [gmail, businessGmail, emayler, customer] = await Promise.all([
@@ -151,27 +135,17 @@ export default async function handler(req, res) {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Método no permitido.' })
   }
-
   let body
   try {
     body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
   } catch {
     return res.status(400).json({ error: 'Solicitud no válida.' })
   }
-
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return res.status(400).json({ error: 'Solicitud no válida.' })
-  }
-
-  if (Buffer.byteLength(JSON.stringify(body), 'utf8') > 12 * 1024) {
-    return res.status(413).json({ error: 'La solicitud supera el tamaño permitido.' })
-  }
-
-  // Honeypot: respond successfully without storing or notifying.
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return res.status(400).json({ error: 'Solicitud no válida.' })
+  if (Buffer.byteLength(JSON.stringify(body), 'utf8') > 12 * 1024) return res.status(413).json({ error: 'La solicitud supera el tamaño permitido.' })
   if (clean(body.website, 200)) return res.status(200).json({ ok: true })
 
   const ip = String(req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim()
-
   const name = clean(body.name, 100)
   const email = clean(body.email, 160).toLowerCase()
   const service = clean(body.service, 100)
@@ -181,24 +155,17 @@ export default async function handler(req, res) {
   const timing = clean(body.timing, 100)
   const features = clean(body.features, 1800)
 
-  if (name.length < 2 || !emailPattern.test(email) || !allowedServices.has(service) || details.length < 20 || body.consent !== true) {
+  if (!emailPattern.test(email)) {
+    return res.status(400).json({ error: 'Introduce un correo electrónico válido (por ejemplo, nombre@dominio.com) para poder enviarte la confirmación.' })
+  }
+  if (name.length < 2 || !allowedServices.has(service) || details.length < 20 || body.consent !== true) {
     return res.status(400).json({ error: 'Revisa los campos obligatorios e inténtalo de nuevo.' })
   }
 
   try {
     const allowed = await consumeRateLimit(ip)
     if (!allowed) return res.status(429).json({ error: 'Espera un minuto antes de enviar otra consulta.' })
-    await saveLead({
-      name,
-      email,
-      organization: organization || null,
-      service,
-      budget,
-      timing: timing || null,
-      details,
-      features: features || null,
-      source: 'website',
-    })
+    await saveLead({ name, email, organization: organization || null, service, budget, timing: timing || null, details, features: features || null, source: 'website' })
   } catch (error) {
     const notConfigured = error instanceof Error && error.message === 'CRM_NOT_CONFIGURED'
     const rateLimitFailed = error instanceof Error && error.message.startsWith('RATE_LIMIT_CHECK_FAILED_')
@@ -212,7 +179,6 @@ export default async function handler(req, res) {
   }
 
   const notification = await sendNotification({ name, email, organization, service, budget, timing, details, features })
-
   const message = notification.team === 'sent' && notification.customer === 'sent'
     ? 'Tu solicitud quedó registrada. Enviamos el aviso a los tres buzones del equipo y una confirmación a tu correo. Normalmente responderemos en 1 a 3 días hábiles.'
     : notification.team === 'partial'
@@ -220,6 +186,5 @@ export default async function handler(req, res) {
       : notification.team !== 'sent'
         ? 'Tu solicitud quedó registrada, pero no pudimos completar los avisos por correo al equipo. Revisaremos la incidencia.'
         : 'Tu solicitud quedó registrada y los tres buzones del equipo recibieron el aviso. La confirmación a tu correo no está disponible en este momento.'
-
   return res.status(201).json({ ok: true, message, notification })
 }
