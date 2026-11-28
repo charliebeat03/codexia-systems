@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const emailPattern = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i
 const allowedServices = new Set([
   'Desarrollo de software',
   'Inteligencia artificial',
@@ -58,7 +58,6 @@ async function consumeRateLimit(ip) {
 async function saveLead(lead) {
   const config = getSupabaseConfig()
   if (!config) throw new Error('CRM_NOT_CONFIGURED')
-
   const response = await fetch(`${config.url}/rest/v1/leads`, {
     method: 'POST',
     headers: {
@@ -68,11 +67,7 @@ async function saveLead(lead) {
     },
     body: JSON.stringify(lead),
   })
-
-  if (!response.ok) {
-    // Keep provider details server-side. Never send database diagnostics to a visitor.
-    throw new Error(`CRM_WRITE_FAILED_${response.status}`)
-  }
+  if (!response.ok) throw new Error(`CRM_WRITE_FAILED_${response.status}`)
 }
 
 async function sendEmail({ to, from, subject, html, text, replyTo }) {
@@ -158,20 +153,15 @@ export default async function handler(req, res) {
   } catch {
     return res.status(400).json({ error: 'Solicitud no válida.' })
   }
-
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return res.status(400).json({ error: 'Solicitud no válida.' })
   }
-
   if (Buffer.byteLength(JSON.stringify(body), 'utf8') > 12 * 1024) {
     return res.status(413).json({ error: 'La solicitud supera el tamaño permitido.' })
   }
-
-  // Honeypot: respond successfully without storing or notifying.
   if (clean(body.website, 200)) return res.status(200).json({ ok: true })
 
   const ip = String(req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim()
-
   const name = clean(body.name, 100)
   const email = clean(body.email, 160).toLowerCase()
   const service = clean(body.service, 100)
@@ -181,7 +171,10 @@ export default async function handler(req, res) {
   const timing = clean(body.timing, 100)
   const features = clean(body.features, 1800)
 
-  if (name.length < 2 || !emailPattern.test(email) || !allowedServices.has(service) || details.length < 20 || body.consent !== true) {
+  if (!emailPattern.test(email)) {
+    return res.status(400).json({ error: 'Introduce un correo electrónico válido (por ejemplo, nombre@dominio.com) para poder enviarte la confirmación.' })
+  }
+  if (name.length < 2 || !allowedServices.has(service) || details.length < 20 || body.consent !== true) {
     return res.status(400).json({ error: 'Revisa los campos obligatorios e inténtalo de nuevo.' })
   }
 
@@ -212,7 +205,6 @@ export default async function handler(req, res) {
   }
 
   const notification = await sendNotification({ name, email, organization, service, budget, timing, details, features })
-
   const message = notification.team === 'sent' && notification.customer === 'sent'
     ? 'Tu solicitud quedó registrada. Enviamos el aviso a los tres buzones del equipo y una confirmación a tu correo. Normalmente responderemos en 1 a 3 días hábiles.'
     : notification.team === 'partial'
@@ -220,6 +212,5 @@ export default async function handler(req, res) {
       : notification.team !== 'sent'
         ? 'Tu solicitud quedó registrada, pero no pudimos completar los avisos por correo al equipo. Revisaremos la incidencia.'
         : 'Tu solicitud quedó registrada y los tres buzones del equipo recibieron el aviso. La confirmación a tu correo no está disponible en este momento.'
-
   return res.status(201).json({ ok: true, message, notification })
 }
