@@ -116,3 +116,6 @@
 @media (prefers-reduced-motion: reduce) {
   .crm-inbox-bell { transition: none; }
 }
+
+.crm-inbox-retry { display:inline-flex; align-items:center; justify-content:center; gap:7px; justify-self:start; padding:8px 10px; border:1px solid rgba(137,169,220,.24); border-radius:8px; background:rgba(28,47,75,.8); color:#dceaff; font:inherit; font-size:.76rem; cursor:pointer; }
+.crm-inbox-retry:disabled { opacity:.5; cursor:wait; }
