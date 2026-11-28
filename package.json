@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "node --test",
-    "check:api": "node --check api/contact.js && node --check api/health.js && node --check api/admin/users.js && node --check api/admin/projects.js && node --check api/crm/reply.js && node --check api/crm/quote-decision.js",
+    "check:api": "node --check api/contact.js && node --check api/health.js && node --check api/admin/users.js && node --check api/admin/projects.js && node --check api/crm/reply.js && node --check api/crm/quote-decision.js && node --check api/crm/lead-decision.js",
     "verify": "node --check api/contact.js && node --check api/health.js && node --check api/admin/users.js && node --check api/admin/projects.js && node --check api/crm/reply.js && node --check api/crm/quote-decision.js && node --test"
   },
   "dependencies": {
