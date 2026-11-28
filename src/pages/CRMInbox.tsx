@@ -103,6 +103,25 @@ export default function CRMInbox() {
     } finally { setBusy(false) }
   }
 
+  async function retryLeadNotice() {
+    if (!selected || !session?.access_token || !['owner','admin'].includes(role)) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const response = await fetch('/api/crm/lead-decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ action: 'notify', leadId: selected.id }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.ok || !result.emailSent) throw new Error(result.error || result.emailError || 'Mailjet no pudo aceptar el correo.')
+      setSelected({ ...selected, rejection_email_sent_at: new Date().toISOString() })
+      await load()
+      setNotice('Notificación de rechazo reenviada. Mailjet aceptó el correo.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo reenviar la notificación.')
+    } finally { setBusy(false) }
+  }
+
   async function sendReply(event: FormEvent) {
     event.preventDefault()
     if (!selected || !session?.access_token || !message.trim() || !subject.trim()) return
@@ -136,7 +155,7 @@ export default function CRMInbox() {
         <button type="button" className="crm-inbox-back" onClick={() => { setSelected(null); setError(''); setNotice('') }}>← Volver a consultas</button>
         <div className="crm-inbox-recipient"><strong>{selected.name}</strong><small>{selected.email}</small><small>{selected.service} · {new Date(selected.created_at).toLocaleString('es')}</small></div>
         <div className="crm-inbox-original"><strong>Consulta original</strong><p>{selected.details}</p>{selected.features && <p><b>Funciones:</b> {selected.features}</p>}</div>
-        {selected.status === 'rejected' && <div className="crm-inbox-rejected"><strong><Ban size={15}/> Solicitud rechazada</strong><p>{selected.rejection_reason || 'Sin motivo registrado.'}</p><small>{selected.rejection_email_sent_at ? 'Notificación aceptada por Mailjet.' : 'La notificación por correo está pendiente.'}</small></div>}
+        {selected.status === 'rejected' && <div className="crm-inbox-rejected"><strong><Ban size={15}/> Solicitud rechazada</strong><p>{selected.rejection_reason || 'Sin motivo registrado.'}</p><small>{selected.rejection_email_sent_at ? 'Notificación aceptada por Mailjet.' : 'La notificación por correo está pendiente.'}</small>{!selected.rejection_email_sent_at && ['owner','admin'].includes(role) && <button type="button" className="crm-inbox-retry" disabled={busy} onClick={() => void retryLeadNotice()}><RefreshCw size={14}/> Reintentar notificación</button>}</div>}
         {['owner','admin'].includes(role) && selected.status !== 'rejected' && !rejecting && <button type="button" className="crm-inbox-reject-trigger" onClick={() => { setRejecting(true); setError(''); setNotice('') }}><Ban size={15}/> Rechazar esta solicitud</button>}
         {rejecting && <form className="crm-inbox-reject-form" onSubmit={rejectLead}><label>Motivo que recibirá el cliente<textarea required minLength={8} maxLength={1200} rows={4} value={rejectionReason} onChange={event => setRejectionReason(event.target.value)} placeholder="Explica de forma clara y respetuosa por qué no podemos aceptar esta solicitud…"/></label><div><button type="submit" disabled={busy || rejectionReason.trim().length < 8}><Mail size={15}/>{busy ? 'Procesando…' : 'Rechazar y enviar correo'}</button><button type="button" onClick={() => { setRejecting(false); setRejectionReason('') }}>Cancelar</button></div></form>}
         <form onSubmit={sendReply}>
