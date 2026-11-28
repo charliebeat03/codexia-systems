@@ -82,7 +82,7 @@ async function sendEmail({ to, from, subject, html, text, replyTo }) {
     const fromName = match ? match[1].replace(/^["']|["']$/g, '').trim() : 'Codexia Systems'
     const message = {
       From: { Email: fromEmail, Name: fromName || 'Codexia Systems' },
-      To: (Array.isArray(to) ? to : [to]).map(Email => ({ Email })),
+      To: [{ Email: to }],
       Subject: subject,
       HTMLPart: html,
       TextPart: text,
@@ -116,13 +116,13 @@ async function sendEmail({ to, from, subject, html, text, replyTo }) {
 }
 
 async function sendNotification({ name, email, organization, service, budget, timing, details, features }) {
-  const teamRecipients = [process.env.CONTACT_TO_EMAIL, process.env.CONTACT_CC_EMAIL]
-    .flatMap(value => String(value || '').split(/[;,]/))
-    .map(value => value.trim().toLowerCase())
-    .filter(Boolean)
-  const recipientsAreValid = teamRecipients.length === 2 && teamRecipients.every(value => emailPattern.test(value))
+  const teamRecipients = {
+    gmail: clean(process.env.CONTACT_TO_EMAIL, 160).toLowerCase(),
+    emayler: clean(process.env.CONTACT_CC_EMAIL, 160).toLowerCase(),
+  }
+  const recipientsAreValid = Object.values(teamRecipients).every(value => emailPattern.test(value))
   if (!process.env.MAILJET_API_KEY || !process.env.MAILJET_SECRET_KEY || !process.env.CONTACT_FROM_EMAIL || !recipientsAreValid) {
-    return { team: 'not_configured', customer: 'not_configured' }
+    return { team: 'not_configured', recipients: { gmail: 'not_configured', emayler: 'not_configured' }, customer: 'not_configured' }
   }
   const fields = [
     ['Nombre', name], ['Correo', email], ['Organización o proyecto', organization || 'No indicado'],
@@ -208,10 +208,12 @@ export default async function handler(req, res) {
   const notification = await sendNotification({ name, email, organization, service, budget, timing, details, features })
 
   const message = notification.team === 'sent' && notification.customer === 'sent'
-    ? 'Tu solicitud quedó registrada. Enviamos una notificación al equipo de Codexia Systems y una confirmación a tu correo. Normalmente responderemos en 1 a 3 días hábiles.'
-    : notification.team !== 'sent'
-      ? 'Tu solicitud quedó registrada, pero no pudimos completar las notificaciones por correo. El equipo deberá revisar la incidencia antes de confirmar la recepción por email.'
-      : 'Tu solicitud quedó registrada y el equipo de Codexia Systems recibió el aviso. La confirmación por correo todavía no está disponible, pero eso no afecta el registro de tu consulta.'
+    ? 'Tu solicitud quedó registrada. Enviamos el aviso a los dos buzones del equipo y una confirmación a tu correo. Normalmente responderemos en 1 a 3 días hábiles.'
+    : notification.team === 'partial'
+      ? 'Tu solicitud quedó registrada, pero solo pudimos enviar el aviso a uno de los dos buzones del equipo. Revisaremos el envío pendiente.'
+      : notification.team !== 'sent'
+        ? 'Tu solicitud quedó registrada, pero no pudimos completar los avisos por correo al equipo. Revisaremos la incidencia.'
+        : 'Tu solicitud quedó registrada y los dos buzones del equipo recibieron el aviso. La confirmación a tu correo no está disponible en este momento.'
 
   return res.status(201).json({ ok: true, message, notification })
 }
