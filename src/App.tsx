@@ -13,7 +13,7 @@ const QuotePage = lazy(() => import('./pages/QuotePage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
 const AccessPage = lazy(() => import('./pages/AccessPage'))
 const PortalPage = lazy(() => import('./pages/PortalPage'))
-const CRMPage = lazy(() => import('./pages/CRMPage'))
+const CRMPage = lazy(() => import('./pages/CRMWorkspace'))
 import { AuthProvider } from './auth/AuthProvider'
 import { SiteFooter, SiteHeader } from './components/SiteShell'
 import SectionLoader from './components/SectionLoader'
@@ -30,7 +30,7 @@ const pageMeta: Record<string, { title: string; description: string }> = {
   '/soporte': { title: 'Centro de soporte | Codexia Systems', description: 'Prepara una consulta de soporte para productos y proyectos de Codexia Systems.' },
   '/contratacion': { title: 'Cómo trabajar con Codexia | Codexia Systems', description: 'Conoce las etapas generales para definir, proponer y desarrollar un proyecto con Codexia Systems.' },
   '/portafolio': { title: 'Portafolio | Codexia Systems', description: 'Conoce proyectos, productos y líneas de trabajo de Codexia Systems, con sus estados claramente identificados.' },
-  '/presupuesto': { title: 'Solicitar presupuesto | Codexia Systems', description: 'Prepara una solicitud inicial para conversar sobre tu próximo proyecto digital con Codexia Systems.' },
+  '/presupuesto': { title: 'Solicitar presupuesto | Codexia Systems', description: 'Prepara una solicitud inicial para conversar sobre tu próximo proyecto digital de manera clara.' },
   '/privacidad': { title: 'Privacidad y datos | Codexia Systems', description: 'Información sobre los datos que se envían mediante los formularios de Codexia Systems y cómo se utilizan.' },
   '/acceso': { title: 'Acceso privado | Codexia Systems', description: 'Acceso privado para clientes y equipo de Codexia Systems.' },
   '/panel': { title: 'Mi espacio | Codexia Systems', description: 'Consulta tus proyectos, avances y documentos en Codexia Systems.' },
@@ -42,24 +42,16 @@ function RouteEffects() {
   useEffect(() => {
     const routeParts = pathname.split('/').filter(Boolean)
     const detailSlug = routeParts[routeParts.length - 1] || ''
-    const prettySlug = detailSlug.replace(/-/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
+    const prettySlug = detailSlug.replace(/-/g, ' ').replace(/\\b\\w/g, letter => letter.toUpperCase())
     const isDetail = pathname.split('/').filter(Boolean).length === 2
     const meta = pageMeta[pathname] ?? (isDetail ? { title: `${prettySlug} | Codexia Systems`, description: `Conoce el enfoque de Codexia Systems para ${prettySlug.toLowerCase()}.` } : { title: 'Página no encontrada | Codexia Systems', description: 'La página que buscas no está disponible.' })
     document.title = meta.title
     let description = document.querySelector<HTMLMetaElement>('meta[name="description"]')
-    if (!description) {
-      description = document.createElement('meta')
-      description.name = 'description'
-      document.head.appendChild(description)
-    }
+    if (!description) { description = document.createElement('meta'); description.name = 'description'; document.head.appendChild(description) }
     description.content = meta.description
     const setProperty = (property: string, content: string) => {
       let tag = document.querySelector<HTMLMetaElement>(`meta[property="${property}"]`)
-      if (!tag) {
-        tag = document.createElement('meta')
-        tag.setAttribute('property', property)
-        document.head.appendChild(tag)
-      }
+      if (!tag) { tag = document.createElement('meta'); tag.setAttribute('property', property); document.head.appendChild(tag) }
       tag.content = content
     }
     setProperty('og:title', meta.title)
@@ -71,11 +63,7 @@ function RouteEffects() {
     if (!robots) { robots = document.createElement('meta'); robots.name = 'robots'; document.head.appendChild(robots) }
     robots.content = pathname === '/acceso' || pathname.startsWith('/panel') ? 'noindex, nofollow' : 'index, follow'
     let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')
-    if (!canonical) {
-      canonical = document.createElement('link')
-      canonical.rel = 'canonical'
-      document.head.appendChild(canonical)
-    }
+    if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical) }
     canonical.href = `${window.location.origin}${pathname}`
     window.scrollTo({ top: 0, behavior: 'auto' })
   }, [pathname])
