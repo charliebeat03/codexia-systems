@@ -91,6 +91,7 @@ test('aplica el rate limit y guarda el lead antes de notificar', async () => {
     SUPABASE_SERVICE_ROLE_KEY: null,
     MAILJET_API_KEY: null, MAILJET_SECRET_KEY: null,
     CONTACT_TO_EMAIL: null,
+    CONTACT_CC_EMAIL: null,
     CONTACT_FROM_EMAIL: null,
   }, async () => {
     const calls = []
@@ -104,7 +105,7 @@ test('aplica el rate limit y guarda el lead antes de notificar', async () => {
     await handler(createRequest({ body: validBody(), headers: { 'x-forwarded-for': '203.0.113.10' } }), res)
     assert.equal(res.statusCode, 201)
     assert.equal(res.payload.ok, true)
-    assert.deepEqual(res.payload.notification, { team: 'not_configured', customer: 'not_configured' })
+    assert.deepEqual(res.payload.notification, { team: 'not_configured', recipients: { gmail: 'not_configured', emayler: 'not_configured' }, customer: 'not_configured' })
     assert.equal(calls.length, 2)
     const limitBody = JSON.parse(calls[0].options.body)
     assert.match(limitBody.p_ip_hash, /^[a-f0-9]{64}$/)
@@ -153,6 +154,7 @@ test('conserva el lead aunque falle la notificación de Mailjet', async () => {
     SUPABASE_SERVICE_ROLE_KEY: null,
     MAILJET_API_KEY: 'api-test-only', MAILJET_SECRET_KEY: 'secret-test-only',
     CONTACT_TO_EMAIL: 'team@example.com',
+    CONTACT_CC_EMAIL: 'contact@codexiasystems.dpdns.org',
     CONTACT_FROM_EMAIL: 'Codexia <noreply@example.com>',
   }, async () => {
     const calls = []
@@ -167,8 +169,8 @@ test('conserva el lead aunque falle la notificación de Mailjet', async () => {
     await handler(createRequest({ body: validBody() }), res)
     assert.equal(res.statusCode, 201)
     assert.equal(res.payload.ok, true)
-    assert.deepEqual(res.payload.notification, { team: 'failed', customer: 'failed' })
-    assert.equal(calls.length, 4)
+    assert.deepEqual(res.payload.notification, { team: 'failed', recipients: { gmail: 'failed', emayler: 'failed' }, customer: 'failed' })
+    assert.equal(calls.length, 5)
     assert.ok(calls[1].endsWith('/rest/v1/leads'))
     assert.equal(calls[2], 'https://api.mailjet.com/v3.1/send')
     assert.equal(calls[3], 'https://api.mailjet.com/v3.1/send')
@@ -182,6 +184,7 @@ test('envía confirmación al cliente y aviso al equipo cuando el correo está c
     SUPABASE_SERVICE_ROLE_KEY: null,
     MAILJET_API_KEY: 'api-test-only', MAILJET_SECRET_KEY: 'secret-test-only',
     CONTACT_TO_EMAIL: 'team@example.com',
+    CONTACT_CC_EMAIL: 'contact@codexiasystems.dpdns.org',
     CONTACT_FROM_EMAIL: 'Codexia <noreply@example.com>',
   }, async () => {
     const emails = []
@@ -197,14 +200,48 @@ test('envía confirmación al cliente y aviso al equipo cuando el correo está c
     const res = createResponse()
     await handler(createRequest({ body: validBody() }), res)
     assert.equal(res.statusCode, 201)
-    assert.deepEqual(res.payload.notification, { team: 'sent', customer: 'sent' })
+    assert.deepEqual(res.payload.notification, { team: 'sent', recipients: { gmail: 'sent', emayler: 'sent' }, customer: 'sent' })
     assert.match(res.payload.message, /1 a 3 días hábiles/i)
-    assert.equal(emails.length, 2)
-    assert.deepEqual(emails.map(mail => mail.body.Messages[0].To[0].Email).sort(), ['cliente@example.com', 'team@example.com'])
+    assert.equal(emails.length, 3)
+    const internalMails = emails.filter(mail => mail.body.Messages[0].Subject.startsWith('Nueva solicitud')).map(mail => mail.body.Messages[0])
+    const customerMail = emails.find(mail => mail.body.Messages[0].To[0].Email === 'cliente@example.com')?.body.Messages[0]
+    assert.deepEqual(internalMails.map(mail => mail.To[0].Email).sort(), ['contact@codexiasystems.dpdns.org', 'team@example.com'])
+    assert.equal(customerMail.To[0].Email, 'cliente@example.com')
     assert.ok(emails.every(mail => mail.headers.Authorization === `Basic ${Buffer.from('api-test-only:secret-test-only').toString('base64')}`))
-    const customerMail = emails.find(mail => mail.body.Messages[0].To[0].Email === 'cliente@example.com').body.Messages[0]
     assert.match(customerMail.HTMLPart, /Hemos recibido tu solicitud/)
     assert.match(customerMail.TextPart, /1 y 3 días hábiles|1 a 3 días hábiles/)
+  })
+})
+
+test('mantiene Emayler y la confirmación aunque Gmail rechace su envío', async () => {
+  await withEnvironment({
+    SUPABASE_URL: 'https://codexia-test.supabase.co',
+    SUPABASE_SECRET_KEY: 'test-secret-only',
+    SUPABASE_SERVICE_ROLE_KEY: null,
+    MAILJET_API_KEY: 'api-test-only', MAILJET_SECRET_KEY: 'secret-test-only',
+    CONTACT_TO_EMAIL: 'team@example.com',
+    CONTACT_CC_EMAIL: 'contact@codexiasystems.dpdns.org',
+    CONTACT_FROM_EMAIL: 'Codexia <noreply@example.com>',
+  }, async () => {
+    globalThis.fetch = async (url, options) => {
+      if (String(url).includes('/rpc/consume_contact_rate_limit')) return new Response('true', { status: 200 })
+      if (String(url).endsWith('/rest/v1/leads')) return new Response(null, { status: 201 })
+      if (String(url) === 'https://api.mailjet.com/v3.1/send') {
+        const message = JSON.parse(options.body).Messages[0]
+        if (message.To[0].Email === 'team@example.com') return new Response('Gmail recipient rejected', { status: 550 })
+        return new Response(JSON.stringify({ Messages: [{ Status: 'success' }] }), { status: 200 })
+      }
+      throw new Error('URL inesperada: ' + url)
+    }
+    const res = createResponse()
+    await handler(createRequest({ body: validBody() }), res)
+    assert.equal(res.statusCode, 201)
+    assert.deepEqual(res.payload.notification, {
+      team: 'partial',
+      recipients: { gmail: 'failed', emayler: 'sent' },
+      customer: 'sent',
+    })
+    assert.match(res.payload.message, /uno de los dos buzones/i)
   })
 })
 

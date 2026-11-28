@@ -16,6 +16,7 @@ const PortalPage = lazy(() => import('./pages/PortalPage'))
 const CRMPage = lazy(() => import('./pages/CRMPage'))
 import { AuthProvider } from './auth/AuthProvider'
 import { SiteFooter, SiteHeader } from './components/SiteShell'
+import SectionLoader from './components/SectionLoader'
 
 const pageMeta: Record<string, { title: string; description: string }> = {
   '/': { title: 'Codexia Systems | Transformamos Procesos en Soluciones', description: 'Desarrollo de software, inteligencia artificial, aplicaciones y automatización para resolver necesidades reales.' },
@@ -86,7 +87,7 @@ function NotFound() {
 }
 
 function AppRoutes() {
-  return <><RouteEffects /><Suspense fallback={<main className="section-wrap internal-main" role="status" aria-live="polite"><p className="internal-intro">Cargando sección…</p></main>}><Routes>
+  return <><RouteEffects /><Suspense fallback={<SectionLoader />}><Routes>
     <Route path="/" element={<HomePage />} />
     <Route path="/servicios" element={<InternalPage page="servicios" />} />
     <Route path="/productos" element={<InternalPage page="productos" />} />
