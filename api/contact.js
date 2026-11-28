@@ -98,10 +98,21 @@ async function sendEmail({ to, from, subject, html, text, replyTo }) {
       },
       body: JSON.stringify({ Messages: [message] }),
     })
-    if (!response.ok) return 'failed'
+    if (!response.ok) {
+      console.error(`[contact-email] Mailjet request failed with HTTP ${response.status}.`)
+      return 'failed'
+    }
     const result = await response.json()
-    return result?.Messages?.[0]?.Status === 'success' ? 'sent' : 'failed'
-  } catch { return 'failed' }
+    const status = result?.Messages?.[0]?.Status
+    if (status !== 'success') {
+      console.error(`[contact-email] Mailjet did not accept the message (status: ${String(status || 'unknown')}).`)
+      return 'failed'
+    }
+    return 'sent'
+  } catch (error) {
+    console.error('[contact-email] Mailjet request error:', error instanceof Error ? error.name : 'UnknownError')
+    return 'failed'
+  }
 }
 
 async function sendNotification({ name, email, organization, service, budget, timing, details, features }) {
