@@ -184,6 +184,7 @@ test('envía confirmación al cliente y aviso al equipo cuando el correo está c
     SUPABASE_SERVICE_ROLE_KEY: null,
     MAILJET_API_KEY: 'api-test-only', MAILJET_SECRET_KEY: 'secret-test-only',
     CONTACT_TO_EMAIL: 'team@example.com',
+    CONTACT_CC_EMAIL: 'contact@codexiasystems.dpdns.org',
     CONTACT_FROM_EMAIL: 'Codexia <noreply@example.com>',
   }, async () => {
     const emails = []
