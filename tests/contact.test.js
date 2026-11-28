@@ -91,6 +91,7 @@ test('aplica el rate limit y guarda el lead antes de notificar', async () => {
     SUPABASE_SERVICE_ROLE_KEY: null,
     MAILJET_API_KEY: null, MAILJET_SECRET_KEY: null,
     CONTACT_TO_EMAIL: null,
+    CONTACT_CC_EMAIL: null,
     CONTACT_FROM_EMAIL: null,
   }, async () => {
     const calls = []
@@ -153,6 +154,7 @@ test('conserva el lead aunque falle la notificación de Mailjet', async () => {
     SUPABASE_SERVICE_ROLE_KEY: null,
     MAILJET_API_KEY: 'api-test-only', MAILJET_SECRET_KEY: 'secret-test-only',
     CONTACT_TO_EMAIL: 'team@example.com',
+    CONTACT_CC_EMAIL: 'contact@codexiasystems.dpdns.org',
     CONTACT_FROM_EMAIL: 'Codexia <noreply@example.com>',
   }, async () => {
     const calls = []
@@ -200,9 +202,11 @@ test('envía confirmación al cliente y aviso al equipo cuando el correo está c
     assert.deepEqual(res.payload.notification, { team: 'sent', customer: 'sent' })
     assert.match(res.payload.message, /1 a 3 días hábiles/i)
     assert.equal(emails.length, 2)
-    assert.deepEqual(emails.map(mail => mail.body.Messages[0].To[0].Email).sort(), ['cliente@example.com', 'team@example.com'])
+    const internalMail = emails.find(mail => mail.body.Messages[0].Subject.startsWith('Nueva solicitud'))?.body.Messages[0]
+    const customerMail = emails.find(mail => mail.body.Messages[0].To[0].Email === 'cliente@example.com')?.body.Messages[0]
+    assert.deepEqual(internalMail.To.map(recipient => recipient.Email).sort(), ['contact@codexiasystems.dpdns.org', 'team@example.com'])
+    assert.equal(customerMail.To[0].Email, 'cliente@example.com')
     assert.ok(emails.every(mail => mail.headers.Authorization === `Basic ${Buffer.from('api-test-only:secret-test-only').toString('base64')}`))
-    const customerMail = emails.find(mail => mail.body.Messages[0].To[0].Email === 'cliente@example.com').body.Messages[0]
     assert.match(customerMail.HTMLPart, /Hemos recibido tu solicitud/)
     assert.match(customerMail.TextPart, /1 y 3 días hábiles|1 a 3 días hábiles/)
   })
