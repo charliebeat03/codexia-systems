@@ -65,20 +65,24 @@ export default async function handler(req, res) {
   try { body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}) } catch { return res.status(400).json({ error: 'Solicitud no válida.' }) }
   if (!body || typeof body !== 'object' || Array.isArray(body) || Buffer.byteLength(JSON.stringify(body), 'utf8') > 5 * 1024) return res.status(400).json({ error: 'Solicitud no válida.' })
   const leadId = clean(body.leadId, 64)
-  const reason = clean(body.reason, 1200)
-  if (!uuidPattern.test(leadId) || reason.length < 8) return res.status(400).json({ error: 'Indica una solicitud válida y un motivo de al menos 8 caracteres.' })
+  const action = clean(body.action || 'reject', 20)
+  const reasonInput = clean(body.reason, 1200)
+  if (!uuidPattern.test(leadId) || !['reject','notify'].includes(action) || (action === 'reject' && reasonInput.length < 8)) return res.status(400).json({ error: 'Indica una solicitud válida y un motivo de al menos 8 caracteres.' })
 
-  const { data: lead, error: leadError } = await admin.from('leads').select('id,name,email,service,status').eq('id', leadId).maybeSingle()
+  const { data: lead, error: leadError } = await admin.from('leads').select('id,name,email,service,status,rejection_reason').eq('id', leadId).maybeSingle()
   if (leadError || !lead) return res.status(404).json({ error: 'No se encontró la solicitud.' })
-  if (lead.status === 'rejected') return res.status(409).json({ error: 'Esta solicitud ya fue rechazada.' })
-  if (!['new', 'reviewing', 'proposal'].includes(lead.status)) return res.status(409).json({ error: 'Solo se pueden rechazar solicitudes nuevas, en revisión o con propuesta.' })
-  if (!emailPattern.test(String(lead.email || ''))) return res.status(422).json({ error: 'La solicitud no tiene un correo válido. No se rechazó para evitar dejar al cliente sin notificación.' })
+  if (action === 'reject' && lead.status === 'rejected') return res.status(409).json({ error: 'Esta solicitud ya fue rechazada.' })
+  if (action === 'notify' && lead.status !== 'rejected') return res.status(409).json({ error: 'Esta solicitud no figura como rechazada.' })
+  if (action === 'reject' && !['new', 'reviewing', 'proposal'].includes(lead.status)) return res.status(409).json({ error: 'Solo se pueden rechazar solicitudes nuevas, en revisión o con propuesta.' })
+  const reason = action === 'reject' ? reasonInput : clean(lead.rejection_reason, 1200)
+  if (reason.length < 8) return res.status(409).json({ error: 'No hay un motivo de rechazo guardado para notificar.' })
+  if (!emailPattern.test(String(lead.email || ''))) return res.status(422).json({ error: 'La solicitud no tiene un correo válido. No se modificó para evitar dejar al cliente sin notificación.' })
 
-  const { data: updated, error: updateError } = await admin.from('leads').update({
-    status: 'rejected', rejection_reason: reason, rejection_email_sent_at: null,
-  }).eq('id', lead.id).in('status', ['new', 'reviewing', 'proposal']).select('id').maybeSingle()
-  if (updateError) return res.status(500).json({ error: 'No se pudo guardar el rechazo: ' + updateError.message })
-  if (!updated) return res.status(409).json({ error: 'La solicitud cambió de estado. Actualiza el CRM e inténtalo de nuevo.' })
+  if (action === 'reject') {
+    const { data: updated, error: updateError } = await admin.from('leads').update({ status: 'rejected', rejection_reason: reason, rejection_email_sent_at: null }).eq('id', lead.id).in('status', ['new', 'reviewing', 'proposal']).select('id').maybeSingle()
+    if (updateError) return res.status(500).json({ error: 'No se pudo guardar el rechazo: ' + updateError.message })
+    if (!updated) return res.status(409).json({ error: 'La solicitud cambió de estado. Actualiza el CRM e inténtalo de nuevo.' })
+  }
 
   const email = await sendEmail({ lead, reason })
   if (email.sent) {
@@ -87,7 +91,7 @@ export default async function handler(req, res) {
   }
   const { error: logError } = await admin.from('activity_log').insert({
     actor_id: authData.user.id, entity_type: 'lead', entity_id: lead.id,
-    action: email.sent ? 'lead_rejected_and_notified' : 'lead_rejected_notification_failed',
+    action: email.sent ? (action === 'reject' ? 'lead_rejected_and_notified' : 'lead_rejection_email_resent') : 'lead_rejected_notification_failed',
     summary: 'Solicitud de ' + lead.name + ' (' + lead.email + ') rechazada. Motivo: ' + reason + (email.sent ? '. Mailjet aceptó el aviso.' : '. Aviso pendiente: ' + email.error),
   })
   if (logError) console.error('[crm-lead-decision] Could not write activity log:', logError.code || 'unknown')
