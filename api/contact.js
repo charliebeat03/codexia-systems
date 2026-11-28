@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 
-const emailPattern = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i
+const emailPattern = /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i
 const allowedServices = new Set([
   'Desarrollo de software',
   'Inteligencia artificial',
@@ -45,10 +45,7 @@ async function consumeRateLimit(ip) {
   const ipHash = createHmac('sha256', config.key).update(ip || 'unknown').digest('hex')
   const response = await fetch(`${config.url}/rest/v1/rpc/consume_contact_rate_limit`, {
     method: 'POST',
-    headers: {
-      apikey: config.key,
-      'Content-Type': 'application/json',
-    },
+    headers: { apikey: config.key, 'Content-Type': 'application/json' },
     body: JSON.stringify({ p_ip_hash: ipHash, p_now: new Date().toISOString(), p_cooldown_seconds: 60 }),
   })
   if (!response.ok) throw new Error(`RATE_LIMIT_CHECK_FAILED_${response.status}`)
@@ -60,11 +57,7 @@ async function saveLead(lead) {
   if (!config) throw new Error('CRM_NOT_CONFIGURED')
   const response = await fetch(`${config.url}/rest/v1/leads`, {
     method: 'POST',
-    headers: {
-      apikey: config.key,
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    },
+    headers: { apikey: config.key, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
     body: JSON.stringify(lead),
   })
   if (!response.ok) throw new Error(`CRM_WRITE_FAILED_${response.status}`)
@@ -86,11 +79,7 @@ async function sendEmail({ to, from, subject, html, text, replyTo }) {
     const credentials = Buffer.from(`${process.env.MAILJET_API_KEY}:${process.env.MAILJET_SECRET_KEY}`).toString('base64')
     const response = await fetch('https://api.mailjet.com/v3.1/send', {
       method: 'POST',
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        'Content-Type': 'application/json',
-        accept: 'application/json',
-      },
+      headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({ Messages: [message] }),
     })
     if (!response.ok) {
@@ -125,7 +114,7 @@ async function sendNotification({ name, email, organization, service, budget, ti
     ['Servicio', service], ['Presupuesto', budget || 'Por definir'], ['Plazo', timing || 'No indicado'],
     ['Descripción', details], ['Funciones o necesidades', features || 'No indicadas'],
   ]
-  const fieldHtml = fields.map(([label, value]) => `<p><b>${escapeHtml(label)}:</b><br>${escapeHtml(value).replace(/\n/g, '<br>')}</p>`).join('')
+  const fieldHtml = fields.map(([label, value]) => `<p><b>${escapeHtml(value ? label : label)}:</b><br>${escapeHtml(value).replace(/\n/g, '<br>')}</p>`).join('')
   const teamHtml = `<h2>Nueva solicitud desde Codexia Systems</h2>${fieldHtml}`
   const customerHtml = `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#17221f;max-width:640px;margin:auto"><h2 style="color:#087b68">Hemos recibido tu solicitud</h2><p>Hola ${escapeHtml(name)},</p><p>Gracias por contactar con <b>Codexia Systems</b>. Tu solicitud quedó registrada correctamente y nuestro equipo revisará la información.</p><p><b>Plazo estimado de respuesta:</b> normalmente entre 1 y 3 días hábiles. Si necesitamos aclarar algún detalle, te escribiremos a esta misma dirección.</p><p>Esta confirmación solo acredita la recepción de tu consulta; todavía no constituye una cotización definitiva ni la aceptación de un proyecto.</p><p>Conserva este correo como referencia. Puedes responder directamente a este mensaje si deseas añadir información.</p><p>Saludos,<br><b>Equipo de Codexia Systems</b><br>Transformamos Procesos en Soluciones.</p></div>`
   const [gmail, businessGmail, emayler, customer] = await Promise.all([
@@ -146,19 +135,14 @@ export default async function handler(req, res) {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Método no permitido.' })
   }
-
   let body
   try {
     body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
   } catch {
     return res.status(400).json({ error: 'Solicitud no válida.' })
   }
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return res.status(400).json({ error: 'Solicitud no válida.' })
-  }
-  if (Buffer.byteLength(JSON.stringify(body), 'utf8') > 12 * 1024) {
-    return res.status(413).json({ error: 'La solicitud supera el tamaño permitido.' })
-  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return res.status(400).json({ error: 'Solicitud no válida.' })
+  if (Buffer.byteLength(JSON.stringify(body), 'utf8') > 12 * 1024) return res.status(413).json({ error: 'La solicitud supera el tamaño permitido.' })
   if (clean(body.website, 200)) return res.status(200).json({ ok: true })
 
   const ip = String(req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim()
@@ -181,17 +165,7 @@ export default async function handler(req, res) {
   try {
     const allowed = await consumeRateLimit(ip)
     if (!allowed) return res.status(429).json({ error: 'Espera un minuto antes de enviar otra consulta.' })
-    await saveLead({
-      name,
-      email,
-      organization: organization || null,
-      service,
-      budget,
-      timing: timing || null,
-      details,
-      features: features || null,
-      source: 'website',
-    })
+    await saveLead({ name, email, organization: organization || null, service, budget, timing: timing || null, details, features: features || null, source: 'website' })
   } catch (error) {
     const notConfigured = error instanceof Error && error.message === 'CRM_NOT_CONFIGURED'
     const rateLimitFailed = error instanceof Error && error.message.startsWith('RATE_LIMIT_CHECK_FAILED_')
