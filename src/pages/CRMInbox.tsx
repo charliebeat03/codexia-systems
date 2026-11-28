@@ -31,6 +31,7 @@ export default function CRMInbox() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [rejectionSchemaReady, setRejectionSchemaReady] = useState(true)
   const [rejecting, setRejecting] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('')
 
@@ -39,10 +40,15 @@ export default function CRMInbox() {
   const load = useCallback(async () => {
     if (!supabase || !user || !staff) return
     const db = supabase as any
-    const [notificationResult, leadResult] = await Promise.all([
+    const [notificationResult, initialLeadResult] = await Promise.all([
       db.from('crm_notifications').select('id,lead_id,title,body,read_at,created_at').order('created_at', { ascending: false }).limit(40),
       db.from('leads').select('id,name,email,organization,service,details,features,created_at,status,rejection_reason,rejection_email_sent_at').order('created_at', { ascending: false }).limit(80),
     ])
+    let leadResult = initialLeadResult
+    if (leadResult.error && /rejection_reason|rejection_email_sent_at|column.*does not exist|schema cache/i.test(String(leadResult.error.message || ''))) {
+      setRejectionSchemaReady(false)
+      leadResult = await db.from('leads').select('id,name,email,organization,service,details,features,created_at,status').order('created_at', { ascending: false }).limit(80)
+    } else if (!leadResult.error) setRejectionSchemaReady(true)
     if (notificationResult.error || leadResult.error) {
       setError('No se pudo cargar la bandeja del CRM. Comprueba los permisos y la conexión.')
       return
@@ -155,8 +161,9 @@ export default function CRMInbox() {
         <button type="button" className="crm-inbox-back" onClick={() => { setSelected(null); setError(''); setNotice('') }}>← Volver a consultas</button>
         <div className="crm-inbox-recipient"><strong>{selected.name}</strong><small>{selected.email}</small><small>{selected.service} · {new Date(selected.created_at).toLocaleString('es')}</small></div>
         <div className="crm-inbox-original"><strong>Consulta original</strong><p>{selected.details}</p>{selected.features && <p><b>Funciones:</b> {selected.features}</p>}</div>
-        {selected.status === 'rejected' && <div className="crm-inbox-rejected"><strong><Ban size={15}/> Solicitud rechazada</strong><p>{selected.rejection_reason || 'Sin motivo registrado.'}</p><small>{selected.rejection_email_sent_at ? 'Notificación aceptada por Mailjet.' : 'La notificación por correo está pendiente.'}</small>{!selected.rejection_email_sent_at && ['owner','admin'].includes(role) && <button type="button" className="crm-inbox-retry" disabled={busy} onClick={() => void retryLeadNotice()}><RefreshCw size={14}/> Reintentar notificación</button>}</div>}
-        {['owner','admin'].includes(role) && selected.status !== 'rejected' && !rejecting && <button type="button" className="crm-inbox-reject-trigger" onClick={() => { setRejecting(true); setError(''); setNotice('') }}><Ban size={15}/> Rechazar esta solicitud</button>}
+        {!rejectionSchemaReady && <p className="crm-inbox-schema-note">La bandeja funciona en modo de compatibilidad. El rechazo de solicitudes se activará al aplicar la actualización pendiente de Supabase.</p>}
+        {selected.status === 'rejected' && <div className="crm-inbox-rejected"><strong><Ban size={15}/> Solicitud rechazada</strong><p>{selected.rejection_reason || 'Sin motivo registrado.'}</p><small>{selected.rejection_email_sent_at ? 'Notificación aceptada por Mailjet.' : 'La notificación por correo está pendiente.'}</small>{rejectionSchemaReady && !selected.rejection_email_sent_at && ['owner','admin'].includes(role) && <button type="button" className="crm-inbox-retry" disabled={busy} onClick={() => void retryLeadNotice()}><RefreshCw size={14}/> Reintentar notificación</button>}</div>}
+        {rejectionSchemaReady && ['owner','admin'].includes(role) && selected.status !== 'rejected' && !rejecting && <button type="button" className="crm-inbox-reject-trigger" onClick={() => { setRejecting(true); setError(''); setNotice('') }}><Ban size={15}/> Rechazar esta solicitud</button>}
         {rejecting && <form className="crm-inbox-reject-form" onSubmit={rejectLead}><label>Motivo que recibirá el cliente<textarea required minLength={8} maxLength={1200} rows={4} value={rejectionReason} onChange={event => setRejectionReason(event.target.value)} placeholder="Explica de forma clara y respetuosa por qué no podemos aceptar esta solicitud…"/></label><div><button type="submit" disabled={busy || rejectionReason.trim().length < 8}><Mail size={15}/>{busy ? 'Procesando…' : 'Rechazar y enviar correo'}</button><button type="button" onClick={() => { setRejecting(false); setRejectionReason('') }}>Cancelar</button></div></form>}
         <form onSubmit={sendReply}>
           <label>Asunto<input required maxLength={180} value={subject} onChange={event => setSubject(event.target.value)}/></label>
