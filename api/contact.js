@@ -118,11 +118,12 @@ async function sendEmail({ to, from, subject, html, text, replyTo }) {
 async function sendNotification({ name, email, organization, service, budget, timing, details, features }) {
   const teamRecipients = {
     gmail: clean(process.env.CONTACT_TO_EMAIL, 160).toLowerCase(),
+    businessGmail: clean(process.env.CONTACT_BUSINESS_EMAIL, 160).toLowerCase(),
     emayler: clean(process.env.CONTACT_CC_EMAIL, 160).toLowerCase(),
   }
   const recipientsAreValid = Object.values(teamRecipients).every(value => emailPattern.test(value))
   if (!process.env.MAILJET_API_KEY || !process.env.MAILJET_SECRET_KEY || !process.env.CONTACT_FROM_EMAIL || !recipientsAreValid) {
-    return { team: 'not_configured', recipients: { gmail: 'not_configured', emayler: 'not_configured' }, customer: 'not_configured' }
+    return { team: 'not_configured', recipients: { gmail: 'not_configured', businessGmail: 'not_configured', emayler: 'not_configured' }, customer: 'not_configured' }
   }
   const fields = [
     ['Nombre', name], ['Correo', email], ['Organización o proyecto', organization || 'No indicado'],
@@ -132,13 +133,15 @@ async function sendNotification({ name, email, organization, service, budget, ti
   const fieldHtml = fields.map(([label, value]) => `<p><b>${escapeHtml(label)}:</b><br>${escapeHtml(value).replace(/\n/g, '<br>')}</p>`).join('')
   const teamHtml = `<h2>Nueva solicitud desde Codexia Systems</h2>${fieldHtml}`
   const customerHtml = `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#17221f;max-width:640px;margin:auto"><h2 style="color:#087b68">Hemos recibido tu solicitud</h2><p>Hola ${escapeHtml(name)},</p><p>Gracias por contactar con <b>Codexia Systems</b>. Tu solicitud quedó registrada correctamente y nuestro equipo revisará la información.</p><p><b>Plazo estimado de respuesta:</b> normalmente entre 1 y 3 días hábiles. Si necesitamos aclarar algún detalle, te escribiremos a esta misma dirección.</p><p>Esta confirmación solo acredita la recepción de tu consulta; todavía no constituye una cotización definitiva ni la aceptación de un proyecto.</p><p>Conserva este correo como referencia. Puedes responder directamente a este mensaje si deseas añadir información.</p><p>Saludos,<br><b>Equipo de Codexia Systems</b><br>Transformamos Procesos en Soluciones.</p></div>`
-  const [gmail, emayler, customer] = await Promise.all([
+  const [gmail, businessGmail, emayler, customer] = await Promise.all([
     sendEmail({ to: teamRecipients.gmail, from: process.env.CONTACT_FROM_EMAIL, replyTo: email, subject: `Nueva solicitud web: ${name} · ${service}`, html: teamHtml, text: fields.map(([label, value]) => `${label}: ${value}`).join('\\n\\n') }),
+    sendEmail({ to: teamRecipients.businessGmail, from: process.env.CONTACT_FROM_EMAIL, replyTo: email, subject: `Nueva solicitud web: ${name} · ${service}`, html: teamHtml, text: fields.map(([label, value]) => `${label}: ${value}`).join('\\n\\n') }),
     sendEmail({ to: teamRecipients.emayler, from: process.env.CONTACT_FROM_EMAIL, replyTo: email, subject: `Nueva solicitud web: ${name} · ${service}`, html: teamHtml, text: fields.map(([label, value]) => `${label}: ${value}`).join('\\n\\n') }),
     sendEmail({ to: email, from: process.env.CONTACT_FROM_EMAIL, subject: 'Hemos recibido tu solicitud · Codexia Systems', html: customerHtml, text: `Hola ${name},\\n\\nGracias por contactar con Codexia Systems. Tu solicitud quedó registrada correctamente y nuestro equipo revisará la información.\\n\\nPlazo estimado de respuesta: normalmente entre 1 y 3 días hábiles. Si necesitamos aclarar algún detalle, te escribiremos a esta misma dirección.\\n\\nEsta confirmación acredita la recepción de tu consulta; todavía no constituye una cotización definitiva ni la aceptación de un proyecto.\\n\\nSaludos,\\nEquipo de Codexia Systems\\nTransformamos Procesos en Soluciones.` }),
   ])
-  const recipients = { gmail, emayler }
-  const team = gmail === 'sent' && emayler === 'sent' ? 'sent' : gmail === 'sent' || emayler === 'sent' ? 'partial' : 'failed'
+  const recipients = { gmail, businessGmail, emayler }
+  const sentCount = Object.values(recipients).filter(status => status === 'sent').length
+  const team = sentCount === 3 ? 'sent' : sentCount > 0 ? 'partial' : 'failed'
   return { team, recipients, customer }
 }
 
@@ -211,12 +214,12 @@ export default async function handler(req, res) {
   const notification = await sendNotification({ name, email, organization, service, budget, timing, details, features })
 
   const message = notification.team === 'sent' && notification.customer === 'sent'
-    ? 'Tu solicitud quedó registrada. Enviamos el aviso a los dos buzones del equipo y una confirmación a tu correo. Normalmente responderemos en 1 a 3 días hábiles.'
+    ? 'Tu solicitud quedó registrada. Enviamos el aviso a los tres buzones del equipo y una confirmación a tu correo. Normalmente responderemos en 1 a 3 días hábiles.'
     : notification.team === 'partial'
-      ? 'Tu solicitud quedó registrada, pero solo pudimos enviar el aviso a uno de los dos buzones del equipo. Revisaremos el envío pendiente.'
+      ? 'Tu solicitud quedó registrada, pero solo pudimos enviar el aviso a parte de los tres buzones del equipo. Revisaremos el envío pendiente.'
       : notification.team !== 'sent'
         ? 'Tu solicitud quedó registrada, pero no pudimos completar los avisos por correo al equipo. Revisaremos la incidencia.'
-        : 'Tu solicitud quedó registrada y los dos buzones del equipo recibieron el aviso. La confirmación a tu correo no está disponible en este momento.'
+        : 'Tu solicitud quedó registrada y los tres buzones del equipo recibieron el aviso. La confirmación a tu correo no está disponible en este momento.'
 
   return res.status(201).json({ ok: true, message, notification })
 }
