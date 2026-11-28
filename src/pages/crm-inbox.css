@@ -20,3 +20,99 @@
   .crm-inbox-error { background: rgba(230,83,83,.14); color: #ffb5ae; }
   .crm-inbox-notice { background: rgba(52,190,130,.14); color: #9ce9c1; }
 }
+
+/* Unified mobile + desktop inbox theme and liquid-glass surface. */
+.crm-inbox-root {
+  --surface: rgba(10, 20, 39, .88);
+  --ink: #edf5ff;
+  --muted: #9aacc8;
+  --line: rgba(137, 169, 220, .24);
+  --soft: rgba(25, 43, 70, .82);
+  --accent: #52d8ef;
+  position: fixed;
+  z-index: 1200;
+  top: auto;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  font-family: inherit;
+}
+.crm-inbox-bell {
+  width: 50px;
+  height: 50px;
+  border: 1px solid rgba(112, 203, 238, .42);
+  border-radius: 17px;
+  background: linear-gradient(145deg, rgba(20, 57, 91, .94), rgba(18, 31, 61, .96));
+  color: #a3efff;
+  box-shadow: 0 12px 34px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.12), 0 0 22px rgba(28,190,231,.12);
+  backdrop-filter: blur(18px) saturate(155%);
+  -webkit-backdrop-filter: blur(18px) saturate(155%);
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.crm-inbox-bell:active { transform: scale(.96); }
+.crm-inbox-bell:focus-visible { outline: 2px solid #66e4f7; outline-offset: 4px; }
+.crm-inbox-panel {
+  top: auto;
+  bottom: 60px;
+  right: 0;
+  width: min(440px, calc(100vw - 28px));
+  max-height: min(720px, calc(100dvh - 112px - env(safe-area-inset-bottom)));
+  border-color: rgba(117, 183, 228, .3);
+  background:
+    radial-gradient(ellipse at 8% 0%, rgba(30, 166, 213, .15), transparent 44%),
+    linear-gradient(145deg, rgba(17, 32, 57, .96), rgba(7, 15, 31, .96));
+  color: #edf5ff;
+  box-shadow: 0 24px 70px rgba(0,0,0,.48), inset 0 1px rgba(255,255,255,.09);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+.crm-inbox-panel > header, .crm-inbox-panel > footer { border-color: rgba(137,169,220,.17); }
+.crm-inbox-panel > header strong { color: #f0f6ff; }
+.crm-inbox-panel > header button { background: rgba(28,47,75,.8); border-color: rgba(137,169,220,.22); color: #dceaff; }
+.crm-inbox-panel > header button:focus-visible,
+.crm-inbox-item:focus-visible, .crm-inbox-lead:focus-visible { outline: 2px solid #66e4f7; outline-offset: -2px; }
+.crm-inbox-section-title, .crm-inbox-panel small { color: #9aacc8; }
+.crm-inbox-item, .crm-inbox-lead { border-color: rgba(137,169,220,.15); color: #e2edff; }
+.crm-inbox-item:hover, .crm-inbox-lead:hover { background: rgba(53,201,232,.08); }
+.crm-inbox-item.unread { background: rgba(53,201,232,.11); }
+.crm-inbox-item-icon { background: rgba(53,201,232,.13); color: #81e9fa; }
+.crm-inbox-recipient, .crm-inbox-original { background: rgba(19,36,62,.8); border-color: rgba(137,169,220,.2); color: #e5efff; }
+.crm-inbox-compose label { color: #c1d1e8; }
+.crm-inbox-compose input, .crm-inbox-compose textarea {
+  background: rgba(5,14,29,.9); border-color: rgba(137,169,220,.3); color: #f0f6ff; color-scheme: dark;
+}
+.crm-inbox-compose input::placeholder, .crm-inbox-compose textarea::placeholder { color: #8298b8; }
+.crm-inbox-sender { color: #94aac8; }
+.crm-inbox-error { background: rgba(230,83,83,.14); color: #ffb5ae; }
+.crm-inbox-notice { background: rgba(52,190,130,.14); color: #9ce9c1; }
+.crm-inbox-reject-trigger {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 11px 13px; border: 1px solid rgba(232,110,126,.32);
+  border-radius: 10px; background: rgba(157,45,66,.17); color: #ffb3bb;
+  font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer;
+}
+.crm-inbox-reject-form { display: grid; gap: 11px; padding: 14px; border: 1px solid rgba(232,110,126,.25); border-radius: 12px; background: rgba(104,30,48,.16); }
+.crm-inbox-reject-form label { display: grid; gap: 7px; color: #f0c5cc; font-size: .78rem; }
+.crm-inbox-reject-form textarea { width: 100%; box-sizing: border-box; padding: 11px; border: 1px solid rgba(232,110,126,.28); border-radius: 9px; background: rgba(20,10,23,.72); color: #fff0f2; font: inherit; resize: vertical; }
+.crm-inbox-reject-form > div { display: flex; gap: 8px; flex-wrap: wrap; }
+.crm-inbox-reject-form button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 12px; border: 1px solid rgba(232,110,126,.28); border-radius: 9px; background: #a83d54; color: white; font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; }
+.crm-inbox-reject-form button[type="button"] { background: rgba(28,47,75,.8); border-color: rgba(137,169,220,.22); color: #dceaff; }
+.crm-inbox-reject-form button:disabled { opacity: .5; cursor: wait; }
+.crm-inbox-rejected { display: grid; gap: 7px; padding: 13px; border: 1px solid rgba(232,110,126,.24); border-radius: 11px; background: rgba(104,30,48,.16); color: #f0dce0; }
+.crm-inbox-rejected strong { display: flex; align-items: center; gap: 7px; color: #ffb3bb; }
+.crm-inbox-rejected p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .82rem; }
+.crm-inbox-rejected small { color: #c49ba5; }
+@media (min-width: 851px) {
+  .crm-inbox-root { right: 30px; bottom: 28px; }
+  .crm-inbox-bell { width: 56px; height: 56px; border-radius: 18px; }
+  .crm-inbox-panel { bottom: 66px; width: min(470px, calc(100vw - 48px)); }
+}
+@media (max-width: 600px) {
+  .crm-inbox-root { right: max(14px, env(safe-area-inset-right)); bottom: calc(14px + env(safe-area-inset-bottom)); }
+  .crm-inbox-bell { width: 48px; height: 48px; border-radius: 16px; }
+  .crm-inbox-panel { right: -2px; bottom: 57px; width: min(430px, calc(100vw - 24px)); max-height: calc(100dvh - 100px - env(safe-area-inset-bottom)); border-radius: 16px; }
+  .crm-inbox-reject-form > div { flex-direction: column; }
+  .crm-inbox-reject-form button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .crm-inbox-bell { transition: none; }
+}
