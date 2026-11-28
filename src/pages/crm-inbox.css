@@ -109,7 +109,7 @@
 @media (max-width: 600px) {
   .crm-inbox-root { right: max(14px, env(safe-area-inset-right)); bottom: calc(14px + env(safe-area-inset-bottom)); }
   .crm-inbox-bell { width: 48px; height: 48px; border-radius: 16px; }
-  .crm-inbox-panel { right: -2px; bottom: 57px; width: min(430px, calc(100vw - 24px)); max-height: calc(100dvh - 100px - env(safe-area-inset-bottom)); border-radius: 16px; }
+  .crm-inbox-panel { right: -2px; bottom: 57px; width: min(430px, calc(100vw - 24px)); max-height: calc(100dvh - 100px - env(safe-area-inset-bottom)); border-radius: 16px; backdrop-filter: blur(12px) saturate(135%); -webkit-backdrop-filter: blur(12px) saturate(135%); }
   .crm-inbox-reject-form > div { flex-direction: column; }
   .crm-inbox-reject-form button { width: 100%; }
 }
